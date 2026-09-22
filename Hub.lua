@@ -5,22 +5,17 @@ local ts = game:GetService("TweenService")
 local http = game:GetService("HttpService")
 local lp = plyrs.LocalPlayer
 
--- ==========================================
--- SISTEMA DE AUTO-UPDATE (ANTI-CACHE + ANTI-LOOP)
--- ==========================================
-local CURRENT_VERSION = "1.7"
+local CURRENT_VERSION = "1.8"
 local VERSION_URL = "https://raw.githubusercontent.com/Evollogic/drivingempire/main/version.txt"
 local SCRIPT_URL = "https://raw.githubusercontent.com/Evollogic/drivingempire/main/Hub.lua"
 
 local function checkForUpdates()
-    if getgenv().UpdatingHub then return false end -- Trava para não criar o loop infinito no jogo
-
-    -- ?t=os.time() força a pegar a versão real no GitHub, ignorando o cache!
+    if getgenv().UpdatingHub then return false end
     local urlAntiCache = VERSION_URL .. "?t=" .. tostring(os.time())
     local success, latestVersion = pcall(function() return game:HttpGet(urlAntiCache) end)
     
     if success and latestVersion then
-        latestVersion = string.match(latestVersion, "%d+%.%d+") -- Pega só o número 1.7
+        latestVersion = string.match(latestVersion, "%d+%.%d+")
         if latestVersion and latestVersion ~= CURRENT_VERSION then
             getgenv().UpdatingHub = true
 
@@ -67,7 +62,6 @@ local function checkForUpdates()
             ts:Create(barFill, TweenInfo.new(1.5, Enum.EasingStyle.Linear), {Size = UDim2.new(1, 0, 1, 0)}):Play()
             task.wait(1.5)
 
-            -- Baixa a versão nova sem usar cache
             local scriptAntiCache = SCRIPT_URL .. "?t=" .. tostring(os.time())
             local successDownload, newScript = pcall(function() return game:HttpGet(scriptAntiCache) end)
             if successDownload and newScript then
@@ -87,9 +81,6 @@ end
 
 if checkForUpdates() then return end
 
--- ==========================================
--- SISTEMA DE SAVE / CONFIG
--- ==========================================
 local configName = "EmpireConfig.json"
 local cfg = { delivery = false }
 
@@ -110,9 +101,6 @@ local function saveCfg()
     end
 end
 
--- ==========================================
--- LIMPEZA E CRIAÇÃO DA GUI
--- ==========================================
 for _, v in pairs(coreGui:GetChildren()) do
     if v.Name == "PremiumHub" then v:Destroy() end
 end
@@ -130,9 +118,6 @@ sg.IgnoreGuiInset = true
 pcall(function() sg.Parent = coreGui end)
 if not sg.Parent then sg.Parent = playerGui end
 
--- ==========================================
--- BOLINHA FLUTUANTE (MINIMIZADO)
--- ==========================================
 local openBall = Instance.new("TextButton")
 openBall.Size = UDim2.new(0, 45, 0, 45)
 openBall.Position = UDim2.new(0, 10, 0.5, -22)
@@ -154,12 +139,9 @@ ballStroke.Color = Color3.fromRGB(50, 150, 255)
 ballStroke.Thickness = 2
 ballStroke.Parent = openBall
 
--- ==========================================
--- JANELA PRINCIPAL (MENOR PARA CABER NO CLL)
--- ==========================================
 local mainFrame = Instance.new("Frame")
-mainFrame.Size = UDim2.new(0, 215, 0, 340)
-mainFrame.Position = UDim2.new(0.5, -107, 0.5, -170)
+mainFrame.Size = UDim2.new(0, 220, 0, 340)
+mainFrame.Position = UDim2.new(0.5, -110, 0.5, -170)
 mainFrame.BackgroundColor3 = Color3.fromRGB(25, 25, 30)
 mainFrame.BorderSizePixel = 0
 mainFrame.Active = true
@@ -182,7 +164,7 @@ titleFix.BorderSizePixel = 0
 titleFix.Parent = topBar
 
 local titleText = Instance.new("TextLabel")
-titleText.Size = UDim2.new(1, -40, 1, 0)
+titleText.Size = UDim2.new(1, -50, 1, 0)
 titleText.Position = UDim2.new(0, 10, 0, 0)
 titleText.BackgroundTransparency = 1
 titleText.Text = "Empire Hub v" .. CURRENT_VERSION
@@ -192,17 +174,17 @@ titleText.TextSize = 13
 titleText.TextXAlignment = Enum.TextXAlignment.Left
 titleText.Parent = topBar
 
+-- BOTÃO X (AFASTADO DA BORDA E VERMELHO CLARO)
 local minBtn = Instance.new("TextButton")
-minBtn.Size = UDim2.new(0, 30, 0, 30)
-minBtn.AnchorPoint = Vector2.new(1, 0)
-minBtn.Position = UDim2.new(1, -5, 0, 2)
-minBtn.BackgroundColor3 = Color3.fromRGB(40, 40, 45)
-minBtn.Text = "-"
+minBtn.Size = UDim2.new(0, 30, 0, 25)
+minBtn.Position = UDim2.new(1, -38, 0, 5) -- Garantido que não vai encostar no canto direito
+minBtn.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
+minBtn.Text = "X"
 minBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
 minBtn.Font = Enum.Font.GothamBold
-minBtn.TextSize = 18
+minBtn.TextSize = 14
 minBtn.Parent = topBar
-Instance.new("UICorner", minBtn).CornerRadius = UDim.new(0, 6)
+Instance.new("UICorner", minBtn).CornerRadius = UDim.new(0, 4)
 
 minBtn.MouseButton1Click:Connect(function()
     mainFrame.Visible = false
@@ -347,10 +329,10 @@ if getgenv().AutoFarmDelivery then
     end)
 end
 
-local function makeDraggable(topbarObject, objectToMove)
+local function makeDraggable(inputObject, objectToMove)
     local dragging, dragInput, dragStart, startPos
 
-    topbarObject.InputBegan:Connect(function(input)
+    inputObject.InputBegan:Connect(function(input)
         if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
             dragging = true
             dragStart = input.Position
@@ -362,7 +344,7 @@ local function makeDraggable(topbarObject, objectToMove)
         end
     end)
     
-    topbarObject.InputChanged:Connect(function(input)
+    inputObject.InputChanged:Connect(function(input)
         if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
             dragInput = input
         end
@@ -383,6 +365,8 @@ local function makeDraggable(topbarObject, objectToMove)
     end)
 end
 
+-- APLICA A ARRASTABILIDADE NO FUNDO GERAL DO MAIN FRAME
+makeDraggable(mainFrame, mainFrame)
 makeDraggable(topBar, mainFrame)
 makeDraggable(openBall, openBall)
 
