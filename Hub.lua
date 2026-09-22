@@ -7,7 +7,7 @@ local lp = plyrs.LocalPlayer
 -- ==========================================
 -- SISTEMA DE AUTO-UPDATE (GITHUB)
 -- ==========================================
-local CURRENT_VERSION = "1.1" 
+local CURRENT_VERSION = "1.2" 
 local VERSION_URL = "https://raw.githubusercontent.com/Evollogic/drivingempire/main/version.txt"
 local SCRIPT_URL = "https://raw.githubusercontent.com/Evollogic/drivingempire/main/Hub.lua"
 
@@ -105,7 +105,7 @@ openBall.TextColor3 = Color3.fromRGB(50, 150, 255)
 openBall.Font = Enum.Font.GothamBlack
 openBall.TextSize = 20
 openBall.BorderSizePixel = 0
-openBall.Visible = false
+openBall.Visible = true -- COMEÇA VISÍVEL PARA NÃO ASSUSTAR NA TELA
 openBall.Parent = sg
 
 local ballCorner = Instance.new("UICorner")
@@ -126,6 +126,7 @@ mainFrame.Position = UDim2.new(0.5, -115, 0.5, -180)
 mainFrame.BackgroundColor3 = Color3.fromRGB(25, 25, 30)
 mainFrame.BorderSizePixel = 0
 mainFrame.Active = true
+mainFrame.Visible = false -- COMEÇA ESCONDIDO
 mainFrame.Parent = sg
 Instance.new("UICorner", mainFrame).CornerRadius = UDim.new(0, 8)
 
@@ -312,7 +313,7 @@ criminalToggleBtn.MouseButton1Click:Connect(function()
     if getgenv().AutoFarmCriminal then
         criminalToggleBtn.BackgroundColor3 = Color3.fromRGB(50, 200, 50)
         criminalToggleBtn.Text = "Criminoso: LIGADO"
-        if root then getgenv().DeliveryInitialPosition = root.CFrame end -- Reaproveita o save de pos
+        if root then getgenv().DeliveryInitialPosition = root.CFrame end
         
         pcall(function()
             if isfile and isfile("Works/Criminal.lua") then
