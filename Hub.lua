@@ -5,7 +5,7 @@ local ts = game:GetService("TweenService")
 local http = game:GetService("HttpService")
 local lp = plyrs.LocalPlayer
 
-local CURRENT_VERSION = "1.8"
+local CURRENT_VERSION = "1.9"
 local VERSION_URL = "https://raw.githubusercontent.com/Evollogic/drivingempire/main/version.txt"
 local SCRIPT_URL = "https://raw.githubusercontent.com/Evollogic/drivingempire/main/Hub.lua"
 
@@ -82,13 +82,14 @@ end
 if checkForUpdates() then return end
 
 local configName = "EmpireConfig.json"
-local cfg = { delivery = false }
+local cfg = { delivery = false, deliveryMode = "Easy" }
 
 if isfile and isfile(configName) then
     pcall(function()
         local data = http:JSONDecode(readfile(configName))
         if data and type(data) == "table" then
-            cfg = data
+            if data.delivery ~= nil then cfg.delivery = data.delivery end
+            if data.deliveryMode ~= nil then cfg.deliveryMode = data.deliveryMode end
         end
     end)
 end
@@ -174,10 +175,9 @@ titleText.TextSize = 13
 titleText.TextXAlignment = Enum.TextXAlignment.Left
 titleText.Parent = topBar
 
--- BOTÃO X (AFASTADO DA BORDA E VERMELHO CLARO)
 local minBtn = Instance.new("TextButton")
 minBtn.Size = UDim2.new(0, 30, 0, 25)
-minBtn.Position = UDim2.new(1, -38, 0, 5) -- Garantido que não vai encostar no canto direito
+minBtn.Position = UDim2.new(1, -38, 0, 5)
 minBtn.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
 minBtn.Text = "X"
 minBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
@@ -268,9 +268,9 @@ local farmPadding = Instance.new("UIPadding")
 farmPadding.PaddingTop = UDim.new(0, 15)
 farmPadding.Parent = farmPage
 
-local function createToggle(name, parent)
+local function createToggle(name, parent, sizeY)
     local btn = Instance.new("TextButton")
-    btn.Size = UDim2.new(0.9, 0, 0, 45)
+    btn.Size = UDim2.new(0.9, 0, 0, sizeY or 45)
     btn.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
     btn.Text = name .. ": DESLIGADO"
     btn.TextColor3 = Color3.fromRGB(255, 255, 255)
@@ -281,7 +281,31 @@ local function createToggle(name, parent)
     return btn
 end
 
-local deliveryToggleBtn = createToggle("Entregador", farmPage)     
+-- ==========================================
+-- BOTÃO DE DIFICULDADE (EASY/HARD)
+-- ==========================================
+getgenv().DeliveryMode = cfg.deliveryMode
+local modeBtn = createToggle("Dificuldade", farmPage, 35)
+modeBtn.Text = "Modo: " .. cfg.deliveryMode
+modeBtn.BackgroundColor3 = cfg.deliveryMode == "Easy" and Color3.fromRGB(50, 200, 50) or Color3.fromRGB(200, 100, 50)
+
+modeBtn.MouseButton1Click:Connect(function()
+    if getgenv().DeliveryMode == "Easy" then
+        getgenv().DeliveryMode = "Hard"
+        modeBtn.BackgroundColor3 = Color3.fromRGB(200, 100, 50)
+    else
+        getgenv().DeliveryMode = "Easy"
+        modeBtn.BackgroundColor3 = Color3.fromRGB(50, 200, 50)
+    end
+    cfg.deliveryMode = getgenv().DeliveryMode
+    modeBtn.Text = "Modo: " .. cfg.deliveryMode
+    saveCfg()
+end)
+
+-- ==========================================
+-- BOTÃO ENTREGADOR PRINCIPAL
+-- ==========================================
+local deliveryToggleBtn = createToggle("Entregador", farmPage, 45)     
 getgenv().AutoFarmDelivery = cfg.delivery 
 getgenv().DeliveryInitialPosition = nil
 
@@ -329,6 +353,9 @@ if getgenv().AutoFarmDelivery then
     end)
 end
 
+-- ==========================================
+-- ARRASTAR TELA
+-- ==========================================
 local function makeDraggable(inputObject, objectToMove)
     local dragging, dragInput, dragStart, startPos
 
@@ -365,7 +392,6 @@ local function makeDraggable(inputObject, objectToMove)
     end)
 end
 
--- APLICA A ARRASTABILIDADE NO FUNDO GERAL DO MAIN FRAME
 makeDraggable(mainFrame, mainFrame)
 makeDraggable(topBar, mainFrame)
 makeDraggable(openBall, openBall)
