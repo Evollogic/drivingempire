@@ -7,7 +7,7 @@ local lp = plyrs.LocalPlayer
 -- ==========================================
 -- SISTEMA DE AUTO-UPDATE (GITHUB)
 -- ==========================================
-local CURRENT_VERSION = "1.5" 
+local CURRENT_VERSION = "1.6" 
 local VERSION_URL = "https://raw.githubusercontent.com/Evollogic/drivingempire/main/version.txt"
 local SCRIPT_URL = "https://raw.githubusercontent.com/Evollogic/drivingempire/main/Hub.lua"
 
@@ -175,7 +175,6 @@ minBtn.MouseButton1Click:Connect(function()
 end)
 
 openBall.MouseButton1Click:Connect(function()
-    -- Removido o recálculo que bugava o frame off-screen quando invisível
     mainFrame.Visible = true
     openBall.Visible = false
 end)
@@ -271,7 +270,6 @@ local function createToggle(name, parent)
 end
 
 local deliveryToggleBtn = createToggle("Entregador", farmPage)
-local criminalToggleBtn = createToggle("Criminoso", farmPage)
 
 getgenv().AutoFarmDelivery = false
 getgenv().DeliveryInitialPosition = nil
@@ -292,29 +290,6 @@ deliveryToggleBtn.MouseButton1Click:Connect(function()
     else
         deliveryToggleBtn.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
         deliveryToggleBtn.Text = "Entregador: DESLIGADO"
-        if root and getgenv().DeliveryInitialPosition then
-            root.Velocity = Vector3.new(0,0,0)
-            root.AssemblyLinearVelocity = Vector3.new(0,0,0)
-            root.CFrame = getgenv().DeliveryInitialPosition
-        end
-    end
-end)
-
-getgenv().AutoFarmCriminal = false
-criminalToggleBtn.MouseButton1Click:Connect(function()
-    getgenv().AutoFarmCriminal = not getgenv().AutoFarmCriminal
-    local root = getRoot()
-    if getgenv().AutoFarmCriminal then
-        criminalToggleBtn.BackgroundColor3 = Color3.fromRGB(50, 200, 50)
-        criminalToggleBtn.Text = "Criminoso: LIGADO"
-        if root then getgenv().DeliveryInitialPosition = root.CFrame end
-        pcall(function() 
-            local url = "https://raw.githubusercontent.com/Evollogic/drivingempire/main/Works/Criminal.lua"
-            loadstring(game:HttpGet(url))()
-        end)
-    else
-        criminalToggleBtn.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
-        criminalToggleBtn.Text = "Criminoso: DESLIGADO"
         if root and getgenv().DeliveryInitialPosition then
             root.Velocity = Vector3.new(0,0,0)
             root.AssemblyLinearVelocity = Vector3.new(0,0,0)
