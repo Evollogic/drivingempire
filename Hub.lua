@@ -6,17 +6,24 @@ local http = game:GetService("HttpService")
 local lp = plyrs.LocalPlayer
 
 -- ==========================================
--- SISTEMA DE AUTO-UPDATE (GITHUB)
+-- SISTEMA DE AUTO-UPDATE (ANTI-CACHE + ANTI-LOOP)
 -- ==========================================
 local CURRENT_VERSION = "1.7"
 local VERSION_URL = "https://raw.githubusercontent.com/Evollogic/drivingempire/main/version.txt"
 local SCRIPT_URL = "https://raw.githubusercontent.com/Evollogic/drivingempire/main/Hub.lua"
 
 local function checkForUpdates()
-    local success, latestVersion = pcall(function() return game:HttpGet(VERSION_URL) end)
-    if success and latestVersion and string.match(latestVersion, "%d+%.%d+") then
-        latestVersion = latestVersion:gsub("%s+", "")
-        if latestVersion ~= CURRENT_VERSION then
+    if getgenv().UpdatingHub then return false end -- Trava para não criar o loop infinito no jogo
+
+    -- ?t=os.time() força a pegar a versão real no GitHub, ignorando o cache!
+    local urlAntiCache = VERSION_URL .. "?t=" .. tostring(os.time())
+    local success, latestVersion = pcall(function() return game:HttpGet(urlAntiCache) end)
+    
+    if success and latestVersion then
+        latestVersion = string.match(latestVersion, "%d+%.%d+") -- Pega só o número 1.7
+        if latestVersion and latestVersion ~= CURRENT_VERSION then
+            getgenv().UpdatingHub = true
+
             for _, v in pairs(coreGui:GetChildren()) do
                 if v.Name == "PremiumHub" or v.Name == "UpdateHub" then v:Destroy() end
             end
@@ -60,13 +67,17 @@ local function checkForUpdates()
             ts:Create(barFill, TweenInfo.new(1.5, Enum.EasingStyle.Linear), {Size = UDim2.new(1, 0, 1, 0)}):Play()
             task.wait(1.5)
 
-            local successDownload, newScript = pcall(function() return game:HttpGet(SCRIPT_URL) end)
+            -- Baixa a versão nova sem usar cache
+            local scriptAntiCache = SCRIPT_URL .. "?t=" .. tostring(os.time())
+            local successDownload, newScript = pcall(function() return game:HttpGet(scriptAntiCache) end)
             if successDownload and newScript then
                 if writefile then writefile("Hub.lua", newScript) end
                 updateGui:Destroy()
+                getgenv().UpdatingHub = false
                 loadstring(newScript)()
                 return true
             else
+                getgenv().UpdatingHub = false
                 updateGui:Destroy()
             end
         end
@@ -147,7 +158,7 @@ ballStroke.Parent = openBall
 -- JANELA PRINCIPAL (MENOR PARA CABER NO CLL)
 -- ==========================================
 local mainFrame = Instance.new("Frame")
-mainFrame.Size = UDim2.new(0, 215, 0, 340) -- Mais estreito para garantir que cabe
+mainFrame.Size = UDim2.new(0, 215, 0, 340)
 mainFrame.Position = UDim2.new(0.5, -107, 0.5, -170)
 mainFrame.BackgroundColor3 = Color3.fromRGB(25, 25, 30)
 mainFrame.BorderSizePixel = 0
@@ -181,11 +192,10 @@ titleText.TextSize = 13
 titleText.TextXAlignment = Enum.TextXAlignment.Left
 titleText.Parent = topBar
 
--- Botão Minimizar (Ancorado 100% no canto direito)
 local minBtn = Instance.new("TextButton")
 minBtn.Size = UDim2.new(0, 30, 0, 30)
 minBtn.AnchorPoint = Vector2.new(1, 0)
-minBtn.Position = UDim2.new(1, -5, 0, 2) -- Sempre 5 pixels afastado da borda direita
+minBtn.Position = UDim2.new(1, -5, 0, 2)
 minBtn.BackgroundColor3 = Color3.fromRGB(40, 40, 45)
 minBtn.Text = "-"
 minBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
@@ -204,7 +214,6 @@ openBall.MouseButton1Click:Connect(function()
     openBall.Visible = false
 end)
 
--- Abas (Topo)
 local tabContainer = Instance.new("Frame")
 tabContainer.Size = UDim2.new(1, 0, 0, 35)
 tabContainer.Position = UDim2.new(0, 0, 0, 35)
@@ -233,7 +242,6 @@ tabConfig.TextSize = 13
 tabConfig.BorderSizePixel = 0
 tabConfig.Parent = tabContainer
 
--- Área de Conteúdo
 local contentArea = Instance.new("Frame")
 contentArea.Size = UDim2.new(1, 0, 1, -70)
 contentArea.Position = UDim2.new(0, 0, 0, 70)
@@ -278,9 +286,6 @@ local farmPadding = Instance.new("UIPadding")
 farmPadding.PaddingTop = UDim.new(0, 15)
 farmPadding.Parent = farmPage
 
--- ==========================================
--- BOTÕES DE TRABALHO
--- ==========================================
 local function createToggle(name, parent)
     local btn = Instance.new("TextButton")
     btn.Size = UDim2.new(0.9, 0, 0, 45)
@@ -295,7 +300,7 @@ local function createToggle(name, parent)
 end
 
 local deliveryToggleBtn = createToggle("Entregador", farmPage)     
-getgenv().AutoFarmDelivery = cfg.delivery -- Puxa o estado salvo do arquivo
+getgenv().AutoFarmDelivery = cfg.delivery 
 getgenv().DeliveryInitialPosition = nil
 
 local function getRoot() 
@@ -311,7 +316,7 @@ local function updateDeliveryUI()
         if root then getgenv().DeliveryInitialPosition = root.CFrame end
         
         pcall(function()
-            local url = "https://raw.githubusercontent.com/Evollogic/drivingempire/main/Works/Delivery.lua"
+            local url = "https://raw.githubusercontent.com/Evollogic/drivingempire/main/Works/Delivery.lua?t=" .. tostring(os.time())
             loadstring(game:HttpGet(url))()
         end)
     else
@@ -330,11 +335,10 @@ end
 deliveryToggleBtn.MouseButton1Click:Connect(function()
     getgenv().AutoFarmDelivery = not getgenv().AutoFarmDelivery
     cfg.delivery = getgenv().AutoFarmDelivery
-    saveCfg() -- Salva no arquivo instantaneamente
+    saveCfg() 
     updateDeliveryUI()
 end)
 
--- AUTO START: Se tava ativado no arquivo, já roda direto
 if getgenv().AutoFarmDelivery then
     task.spawn(function()
         if not lp.Character then lp.CharacterAdded:Wait() end
@@ -343,9 +347,6 @@ if getgenv().AutoFarmDelivery then
     end)
 end
 
--- ==========================================
--- SISTEMA DE ARRASTAR COM BLOQUEIO DE TELA
--- ==========================================
 local function makeDraggable(topbarObject, objectToMove)
     local dragging, dragInput, dragStart, startPos
 
@@ -385,14 +386,11 @@ end
 makeDraggable(topBar, mainFrame)
 makeDraggable(openBall, openBall)
 
--- ==========================================
--- AUTO CLAIM BACKGROUND
--- ==========================================
 task.spawn(function()
     if not getgenv().AutoClaimRunning then
         getgenv().AutoClaimRunning = true
         pcall(function()
-            local url = "https://raw.githubusercontent.com/Evollogic/drivingempire/main/Auto/autoclaim.lua"
+            local url = "https://raw.githubusercontent.com/Evollogic/drivingempire/main/Auto/autoclaim.lua?t=" .. tostring(os.time())
             loadstring(game:HttpGet(url))()
         end)
     end
