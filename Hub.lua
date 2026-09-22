@@ -7,7 +7,7 @@ local lp = plyrs.LocalPlayer
 -- ==========================================
 -- SISTEMA DE AUTO-UPDATE (GITHUB)
 -- ==========================================
-local CURRENT_VERSION = "1.2" 
+local CURRENT_VERSION = "1.4" 
 local VERSION_URL = "https://raw.githubusercontent.com/Evollogic/drivingempire/main/version.txt"
 local SCRIPT_URL = "https://raw.githubusercontent.com/Evollogic/drivingempire/main/Hub.lua"
 
@@ -22,6 +22,7 @@ local function checkForUpdates()
             
             local updateGui = Instance.new("ScreenGui")
             updateGui.Name = "UpdateHub"
+            updateGui.IgnoreGuiInset = true
             pcall(function() updateGui.Parent = coreGui end)
             if not updateGui.Parent then updateGui.Parent = lp:WaitForChild("PlayerGui") end
             
@@ -90,6 +91,7 @@ end
 local sg = Instance.new("ScreenGui")
 sg.Name = "PremiumHub"
 sg.ResetOnSpawn = false
+sg.IgnoreGuiInset = true
 pcall(function() sg.Parent = coreGui end)
 if not sg.Parent then sg.Parent = playerGui end
 
@@ -105,7 +107,7 @@ openBall.TextColor3 = Color3.fromRGB(50, 150, 255)
 openBall.Font = Enum.Font.GothamBlack
 openBall.TextSize = 20
 openBall.BorderSizePixel = 0
-openBall.Visible = true -- COMEÇA VISÍVEL PARA NÃO ASSUSTAR NA TELA
+openBall.Visible = true 
 openBall.Parent = sg
 
 local ballCorner = Instance.new("UICorner")
@@ -126,7 +128,7 @@ mainFrame.Position = UDim2.new(0.5, -115, 0.5, -180)
 mainFrame.BackgroundColor3 = Color3.fromRGB(25, 25, 30)
 mainFrame.BorderSizePixel = 0
 mainFrame.Active = true
-mainFrame.Visible = false -- COMEÇA ESCONDIDO
+mainFrame.Visible = false 
 mainFrame.Parent = sg
 Instance.new("UICorner", mainFrame).CornerRadius = UDim.new(0, 8)
 
@@ -173,6 +175,16 @@ minBtn.MouseButton1Click:Connect(function()
 end)
 
 openBall.MouseButton1Click:Connect(function()
+    local screenSize = sg.AbsoluteSize
+    local objSize = mainFrame.AbsoluteSize
+    local currX = mainFrame.AbsolutePosition.X
+    local currY = mainFrame.AbsolutePosition.Y
+    
+    local clampX = math.clamp(currX, 0, screenSize.X - objSize.X)
+    local clampY = math.clamp(currY, 0, screenSize.Y - objSize.Y)
+    
+    mainFrame.Position = UDim2.new(0, clampX, 0, clampY)
+    
     mainFrame.Visible = true
     openBall.Visible = false
 end)
@@ -270,14 +282,11 @@ end
 local deliveryToggleBtn = createToggle("Entregador", farmPage)
 local criminalToggleBtn = createToggle("Criminoso", farmPage)
 
--- Lógica Entregador
 getgenv().AutoFarmDelivery = false
 getgenv().DeliveryInitialPosition = nil
+local function getRoot() return lp.Character and lp.Character:FindFirstChild("HumanoidRootPart") end
 
-local function getRoot()
-    return lp.Character and lp.Character:FindFirstChild("HumanoidRootPart")
-end
-
+-- Modificado para puxar do GitHub
 deliveryToggleBtn.MouseButton1Click:Connect(function()
     getgenv().AutoFarmDelivery = not getgenv().AutoFarmDelivery
     local root = getRoot()
@@ -286,77 +295,82 @@ deliveryToggleBtn.MouseButton1Click:Connect(function()
         deliveryToggleBtn.BackgroundColor3 = Color3.fromRGB(50, 200, 50)
         deliveryToggleBtn.Text = "Entregador: LIGADO"
         if root then getgenv().DeliveryInitialPosition = root.CFrame end
-        
-        pcall(function()
-            if isfile and isfile("Works/Delivery.lua") then
-                loadstring(readfile("Works/Delivery.lua"))()
-            end
+        pcall(function() 
+            local url = "https://raw.githubusercontent.com/Evollogic/drivingempire/main/Works/Delivery.lua"
+            loadstring(game:HttpGet(url))()
         end)
     else
         deliveryToggleBtn.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
         deliveryToggleBtn.Text = "Entregador: DESLIGADO"
         if root and getgenv().DeliveryInitialPosition then
-            root.Velocity = Vector3.new(0, 0, 0)
-            root.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
+            root.Velocity = Vector3.new(0,0,0)
+            root.AssemblyLinearVelocity = Vector3.new(0,0,0)
             root.CFrame = getgenv().DeliveryInitialPosition
         end
     end
 end)
 
--- Lógica Criminoso
+-- Modificado para puxar do GitHub
 getgenv().AutoFarmCriminal = false
-
 criminalToggleBtn.MouseButton1Click:Connect(function()
     getgenv().AutoFarmCriminal = not getgenv().AutoFarmCriminal
     local root = getRoot()
-
     if getgenv().AutoFarmCriminal then
         criminalToggleBtn.BackgroundColor3 = Color3.fromRGB(50, 200, 50)
         criminalToggleBtn.Text = "Criminoso: LIGADO"
         if root then getgenv().DeliveryInitialPosition = root.CFrame end
-        
-        pcall(function()
-            if isfile and isfile("Works/Criminal.lua") then
-                loadstring(readfile("Works/Criminal.lua"))()
-            else
-                warn("[ERRO] Works/Criminal.lua não encontrado!")
-            end
+        pcall(function() 
+            local url = "https://raw.githubusercontent.com/Evollogic/drivingempire/main/Works/Criminal.lua"
+            loadstring(game:HttpGet(url))()
         end)
     else
         criminalToggleBtn.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
         criminalToggleBtn.Text = "Criminoso: DESLIGADO"
         if root and getgenv().DeliveryInitialPosition then
-            root.Velocity = Vector3.new(0, 0, 0)
-            root.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
+            root.Velocity = Vector3.new(0,0,0)
+            root.AssemblyLinearVelocity = Vector3.new(0,0,0)
             root.CFrame = getgenv().DeliveryInitialPosition
         end
     end
 end)
 
 -- ==========================================
--- SISTEMA DE ARRASTAR (JANELA E BOLINHA)
+-- SISTEMA DE ARRASTAR COM BLOQUEIO DE TELA
 -- ==========================================
 local function makeDraggable(topbarObject, objectToMove)
     local dragging, dragInput, dragStart, startPos
+    
     topbarObject.InputBegan:Connect(function(input)
         if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
             dragging = true
             dragStart = input.Position
-            startPos = objectToMove.Position
+            startPos = objectToMove.AbsolutePosition
+            
             input.Changed:Connect(function()
                 if input.UserInputState == Enum.UserInputState.End then dragging = false end
             end)
         end
     end)
+    
     topbarObject.InputChanged:Connect(function(input)
         if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
             dragInput = input
         end
     end)
+    
     uis.InputChanged:Connect(function(input)
         if input == dragInput and dragging then
             local delta = input.Position - dragStart
-            objectToMove.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+            local screenSize = sg.AbsoluteSize
+            local objSize = objectToMove.AbsoluteSize
+            
+            local newX = startPos.X + delta.X
+            local newY = startPos.Y + delta.Y
+            
+            newX = math.clamp(newX, 0, screenSize.X - objSize.X)
+            newY = math.clamp(newY, 0, screenSize.Y - objSize.Y)
+            
+            objectToMove.Position = UDim2.new(0, newX, 0, newY)
         end
     end)
 end
@@ -364,14 +378,15 @@ end
 makeDraggable(topBar, mainFrame)
 makeDraggable(openBall, openBall)
 
--- Auto Claim Background
+-- ==========================================
+-- AUTO CLAIM BACKGROUND (GITHUB RAW)
+-- ==========================================
 task.spawn(function()
-    pcall(function()
-        if isfile and isfile("Auto/autoclaim.lua") then
-            if not getgenv().AutoClaimRunning then
-                getgenv().AutoClaimRunning = true
-                loadstring(readfile("Auto/autoclaim.lua"))()
-            end
-        end
-    end)
+    if not getgenv().AutoClaimRunning then
+        getgenv().AutoClaimRunning = true
+        pcall(function()
+            local url = "https://raw.githubusercontent.com/Evollogic/drivingempire/main/Auto/autoclaim.lua"
+            loadstring(game:HttpGet(url))()
+        end)
+    end
 end)
