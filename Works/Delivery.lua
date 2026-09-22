@@ -1,6 +1,7 @@
 local rs = game:GetService("ReplicatedStorage")
 local ws = game:GetService("Workspace")
-local lp = game:GetService("Players").LocalPlayer
+local plyrs = game:GetService("Players")
+local lp = plyrs.LocalPlayer
 local remotes = rs:WaitForChild("Remotes")
 
 local reqStart = remotes:FindFirstChild("RequestStartJobSession")
@@ -12,33 +13,38 @@ if getgenv().DeliveryScriptRunning then return end
 getgenv().DeliveryScriptRunning = true
 getgenv().DeliveryMode = getgenv().DeliveryMode or "Easy"
 
-task.spawn(function()
-    local plat = Instance.new("Part")
-    plat.Size = Vector3.new(20, 2, 20)
-    plat.Anchored = true
-    plat.Transparency = 0.6
-    plat.CanCollide = true
-    -- Adicionado uma cor verdinha pra você VER a placa flutuando e te salvando
-    plat.Material = Enum.Material.ForceField
-    plat.Color = Color3.new(0, 1, 0)
+-- Função para restaurar a física quando você DESLIGAR o farm
+local function restorePhysics()
+    local char = lp.Character
+    if not char then return end
+    local root = char:FindFirstChild("HumanoidRootPart")
+    if root then root.Anchored = false end
     
-    local function getRoot()
-        local char = lp.Character
-        if not char then return nil end
-        
-        -- Se estiver no carro, sai do carro antes de teleportar (evita bugar o mapa)
-        local hum = char:FindFirstChild("Humanoid")
-        if hum and hum.Sit then
-            hum.Sit = false
-            task.wait(0.1)
+    for _, v in pairs(char:GetChildren()) do
+        if v:IsA("BasePart") then
+            v.CanCollide = true
         end
-        
-        return char:FindFirstChild("HumanoidRootPart")
     end
+end
 
+local function getRoot()
+    local char = lp.Character
+    if not char then return nil end
+    
+    -- Ejetar do carro se estiver sentado
+    local hum = char:FindFirstChild("Humanoid")
+    if hum and hum.Sit then
+        hum.Sit = false
+        task.wait(0.1)
+    end
+    return char:FindFirstChild("HumanoidRootPart")
+end
+
+task.spawn(function()
     while task.wait(0.2) do
+        -- Se desligou o farm, devolve a física ao jogador e para o script
         if not getgenv().AutoFarmDelivery then
-            plat.Parent = nil
+            restorePhysics()
             getgenv().DeliveryScriptRunning = false
             break
         end
@@ -46,24 +52,30 @@ task.spawn(function()
         local root = getRoot()
         if not root then continue end
 
-        plat.Parent = ws
         local target = ws:FindFirstChild("DeliveryTargetAnchor")
 
-        if target then
+        if target and target.Parent == ws then
+            -- TEM ENTREGA: Congela o jogador no ar exatamente no local
             local pos = target.Position
-            -- CORREÇÃO: Plataforma 5 studs ACIMA DO CHÃO
-            plat.CFrame = CFrame.new(pos + Vector3.new(0, 5, 0))
             
-            root.Velocity = Vector3.new(0, 0, 0)
-            root.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
-            -- CORREÇÃO: Jogador 8 studs ACIMA DO CHÃO (Cai cravado na plataforma)
-            root.CFrame = CFrame.new(pos + Vector3.new(0, 8, 0))
+            -- Desliga colisões (Modo Fantasma)
+            for _, v in pairs(lp.Character:GetChildren()) do
+                if v:IsA("BasePart") then v.CanCollide = false end
+            end
+            
+            -- Congela o personagem no ar (NUNCA MAIS CAI NO VOID)
+            root.Velocity = Vector3.zero
+            root.AssemblyLinearVelocity = Vector3.zero
+            root.Anchored = true
+            root.CFrame = CFrame.new(pos.X, pos.Y + 3, pos.Z)
 
             if attComplete then pcall(function() attComplete:InvokeServer() end) end
+
         else
+            -- PROCURAR JOB PAD PARA INICIAR
             local jobPad = nil
             for _, v in pairs(ws:GetDescendants()) do
-                if v.Name == "JobPadPrompt" and v.Parent then
+                if v:IsA("ProximityPrompt") and v.Name == "JobPadPrompt" and v.Parent then
                     jobPad = v.Parent
                     break
                 end
@@ -71,15 +83,19 @@ task.spawn(function()
 
             if jobPad then
                 local pos = jobPad.Position
-                -- CORREÇÃO: Plataforma 5 studs ACIMA do JobPad
-                plat.CFrame = CFrame.new(pos + Vector3.new(0, 5, 0))
                 
-                root.Velocity = Vector3.new(0, 0, 0)
-                root.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
-                -- CORREÇÃO: Jogador cai cravado na plataforma
-                root.CFrame = CFrame.new(pos + Vector3.new(0, 8, 0))
+                -- Desliga colisões (Modo Fantasma)
+                for _, v in pairs(lp.Character:GetChildren()) do
+                    if v:IsA("BasePart") then v.CanCollide = false end
+                end
 
-                task.wait(0.5)
+                -- Congela o personagem no ar acima da prancheta
+                root.Velocity = Vector3.zero
+                root.AssemblyLinearVelocity = Vector3.zero
+                root.Anchored = true
+                root.CFrame = CFrame.new(pos.X, pos.Y + 3, pos.Z)
+
+                task.wait(0.2)
 
                 if setMode then pcall(function() setMode:FireServer(getgenv().DeliveryMode) end) end
 
@@ -90,9 +106,11 @@ task.spawn(function()
                     end
                 end
 
-                task.wait(0.5)
+                task.wait(0.2)
+                
                 if reqStart then pcall(function() reqStart:FireServer("Delivery", "jobPad", "Safe") end) end
                 if attPickup then pcall(function() attPickup:InvokeServer() end) end
+                
                 task.wait(1.5)
             end
         end
