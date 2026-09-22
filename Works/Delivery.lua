@@ -1,26 +1,42 @@
-local ws = game:GetService("Workspace")
 local rs = game:GetService("ReplicatedStorage")
-local plyrs = game:GetService("Players")
-local lp = plyrs.LocalPlayer
+local ws = game:GetService("Workspace")
+local lp = game:GetService("Players").LocalPlayer
 local remotes = rs:WaitForChild("Remotes")
+
+local reqStart = remotes:FindFirstChild("RequestStartJobSession")
+local setMode = remotes:FindFirstChild("SetDeliveryMode")
+local attPickup = remotes:FindFirstChild("AttemptDeliveryPickup")
+local attComplete = remotes:FindFirstChild("AttemptDeliveryComplete")
 
 if getgenv().DeliveryScriptRunning then return end
 getgenv().DeliveryScriptRunning = true
+getgenv().DeliveryMode = getgenv().DeliveryMode or "Easy"
 
 task.spawn(function()
+    local plat = Instance.new("Part")
+    plat.Size = Vector3.new(20, 2, 20)
+    plat.Anchored = true
+    plat.Transparency = 0.6
+    plat.CanCollide = true
+    -- Adicionado uma cor verdinha pra você VER a placa flutuando e te salvando
+    plat.Material = Enum.Material.ForceField
+    plat.Color = Color3.new(0, 1, 0)
+    
     local function getRoot()
-        return lp.Character and lp.Character:FindFirstChild("HumanoidRootPart")
+        local char = lp.Character
+        if not char then return nil end
+        
+        -- Se estiver no carro, sai do carro antes de teleportar (evita bugar o mapa)
+        local hum = char:FindFirstChild("Humanoid")
+        if hum and hum.Sit then
+            hum.Sit = false
+            task.wait(0.1)
+        end
+        
+        return char:FindFirstChild("HumanoidRootPart")
     end
 
-    local plat = Instance.new("Part")
-    plat.Size = Vector3.new(40, 5, 40)
-    plat.Anchored = true
-    -- Deixei 0.5 (meio transparente) para você VER que está seguro em cima dela
-    plat.Transparency = 0.5 
-    plat.CanCollide = true
-    plat.Name = "SafePlat"
-
-    while task.wait(1) do
+    while task.wait(0.2) do
         if not getgenv().AutoFarmDelivery then
             plat.Parent = nil
             getgenv().DeliveryScriptRunning = false
@@ -31,76 +47,53 @@ task.spawn(function()
         if not root then continue end
 
         plat.Parent = ws
-
         local target = ws:FindFirstChild("DeliveryTargetAnchor")
 
         if target then
-            local startPos = target.Position
+            local pos = target.Position
+            -- CORREÇÃO: Plataforma 5 studs ACIMA DO CHÃO
+            plat.CFrame = CFrame.new(pos + Vector3.new(0, 5, 0))
             
-            -- PLATAFORMA MUITO ALTO (10 studs acima do chão)
-            plat.CFrame = CFrame.new(startPos + Vector3.new(0, 10, 0))
+            root.Velocity = Vector3.new(0, 0, 0)
+            root.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
+            -- CORREÇÃO: Jogador 8 studs ACIMA DO CHÃO (Cai cravado na plataforma)
+            root.CFrame = CFrame.new(pos + Vector3.new(0, 8, 0))
 
-            while target and target.Parent == ws and (target.Position - startPos).Magnitude < 2 and getgenv().AutoFarmDelivery do
-                local currentRoot = getRoot()
-                if currentRoot then
-                    currentRoot.Velocity = Vector3.new(0, 0, 0)
-                    currentRoot.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
-                    -- JOGADOR CAINDO DIRETO NA PLATAFORMA (14 studs acima do chão)
-                    currentRoot.CFrame = CFrame.new(startPos + Vector3.new(0, 14, 0))
-                end
-                task.wait(0.5)
-            end
+            if attComplete then pcall(function() attComplete:InvokeServer() end) end
         else
             local jobPad = nil
             for _, v in pairs(ws:GetDescendants()) do
-                if v:IsA("ProximityPrompt") and v.Name == "JobPadPrompt" then
-                    if v.Parent and v.Parent:IsA("BasePart") then
-                        jobPad = v.Parent
-                        break
-                    end
+                if v.Name == "JobPadPrompt" and v.Parent then
+                    jobPad = v.Parent
+                    break
                 end
             end
 
             if jobPad then
-                local padPos = jobPad.Position
-                
-                -- PLATAFORMA MUITO ALTO (10 studs acima do JobPad)
-                plat.CFrame = CFrame.new(padPos + Vector3.new(0, 10, 0))
+                local pos = jobPad.Position
+                -- CORREÇÃO: Plataforma 5 studs ACIMA do JobPad
+                plat.CFrame = CFrame.new(pos + Vector3.new(0, 5, 0))
                 
                 root.Velocity = Vector3.new(0, 0, 0)
                 root.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
-                -- JOGADOR SEGURO NO AR (14 studs acima)
-                root.CFrame = CFrame.new(padPos + Vector3.new(0, 14, 0))
+                -- CORREÇÃO: Jogador cai cravado na plataforma
+                root.CFrame = CFrame.new(pos + Vector3.new(0, 8, 0))
 
-                task.wait(1)
+                task.wait(0.5)
 
-                if fireproximityprompt then
-                    for _, prompt in pairs(jobPad:GetDescendants()) do
-                        if prompt:IsA("ProximityPrompt") then
-                            -- Força o alcance do botão pra 100, assim você ativa mesmo estando alto
-                            prompt.MaxActivationDistance = 100 
-                            pcall(function() fireproximityprompt(prompt) end)
-                        end
+                if setMode then pcall(function() setMode:FireServer(getgenv().DeliveryMode) end) end
+
+                for _, prompt in pairs(jobPad:GetDescendants()) do
+                    if prompt:IsA("ProximityPrompt") then
+                        prompt.MaxActivationDistance = 50
+                        pcall(function() fireproximityprompt(prompt) end)
                     end
                 end
 
-                task.wait(1)
-
-                local startRemote = remotes:FindFirstChild("RequestStartJobSession")
-                if startRemote then
-                    pcall(function() startRemote:InvokeServer("Delivery", "jobPad", "Safe") end)
-                    pcall(function() startRemote:FireServer("Delivery", "jobPad", "Safe") end)
-                end
-
-                task.wait(1)
-
-                local pickupRemote = remotes:FindFirstChild("AttemptDeliveryPickup")
-                if pickupRemote then
-                    pcall(function() pickupRemote:InvokeServer() end)
-                    pcall(function() pickupRemote:FireServer() end)
-                end
-
-                task.wait(3)
+                task.wait(0.5)
+                if reqStart then pcall(function() reqStart:FireServer("Delivery", "jobPad", "Safe") end) end
+                if attPickup then pcall(function() attPickup:InvokeServer() end) end
+                task.wait(1.5)
             end
         end
     end
