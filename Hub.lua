@@ -7,7 +7,7 @@ local lp = plyrs.LocalPlayer
 -- ==========================================
 -- SISTEMA DE AUTO-UPDATE (GITHUB)
 -- ==========================================
-local CURRENT_VERSION = "1.4" 
+local CURRENT_VERSION = "1.5" 
 local VERSION_URL = "https://raw.githubusercontent.com/Evollogic/drivingempire/main/version.txt"
 local SCRIPT_URL = "https://raw.githubusercontent.com/Evollogic/drivingempire/main/Hub.lua"
 
@@ -175,16 +175,7 @@ minBtn.MouseButton1Click:Connect(function()
 end)
 
 openBall.MouseButton1Click:Connect(function()
-    local screenSize = sg.AbsoluteSize
-    local objSize = mainFrame.AbsoluteSize
-    local currX = mainFrame.AbsolutePosition.X
-    local currY = mainFrame.AbsolutePosition.Y
-    
-    local clampX = math.clamp(currX, 0, screenSize.X - objSize.X)
-    local clampY = math.clamp(currY, 0, screenSize.Y - objSize.Y)
-    
-    mainFrame.Position = UDim2.new(0, clampX, 0, clampY)
-    
+    -- Removido o recálculo que bugava o frame off-screen quando invisível
     mainFrame.Visible = true
     openBall.Visible = false
 end)
@@ -286,7 +277,6 @@ getgenv().AutoFarmDelivery = false
 getgenv().DeliveryInitialPosition = nil
 local function getRoot() return lp.Character and lp.Character:FindFirstChild("HumanoidRootPart") end
 
--- Modificado para puxar do GitHub
 deliveryToggleBtn.MouseButton1Click:Connect(function()
     getgenv().AutoFarmDelivery = not getgenv().AutoFarmDelivery
     local root = getRoot()
@@ -310,7 +300,6 @@ deliveryToggleBtn.MouseButton1Click:Connect(function()
     end
 end)
 
--- Modificado para puxar do GitHub
 getgenv().AutoFarmCriminal = false
 criminalToggleBtn.MouseButton1Click:Connect(function()
     getgenv().AutoFarmCriminal = not getgenv().AutoFarmCriminal
@@ -379,7 +368,7 @@ makeDraggable(topBar, mainFrame)
 makeDraggable(openBall, openBall)
 
 -- ==========================================
--- AUTO CLAIM BACKGROUND (GITHUB RAW)
+-- AUTO CLAIM BACKGROUND
 -- ==========================================
 task.spawn(function()
     if not getgenv().AutoClaimRunning then
