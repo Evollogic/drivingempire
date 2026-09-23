@@ -5,7 +5,17 @@ local lp = plyrs.LocalPlayer
 local remotes = rs:WaitForChild("Remotes")
 
 -- ==========================================
--- SISTEMA DE LOGS E BOTÃO DE COPIAR
+-- DESTRÓI VERSÕES ANTIGAS DO SCRIPT
+-- ==========================================
+if getgenv().DeliveryLoop then
+    pcall(task.cancel, getgenv().DeliveryLoop)
+end
+getgenv().AutoFarmDelivery = true
+getgenv().JobPhase = "Pickup" 
+getgenv().DeliveryMode = getgenv().DeliveryMode or "Easy"
+
+-- ==========================================
+-- SISTEMA DE LOGS UI
 -- ==========================================
 getgenv().DeliveryLogs = {}
 local function addLog(msg)
@@ -33,10 +43,6 @@ btn.TextScaled = true
 btn.Text = "📋 Copiar Logs"
 btn.Parent = sg
 
-local uicorner = Instance.new("UICorner")
-uicorner.CornerRadius = UDim.new(0, 8)
-uicorner.Parent = btn
-
 btn.MouseButton1Click:Connect(function()
     if setclipboard then
         setclipboard(table.concat(getgenv().DeliveryLogs, "\n"))
@@ -47,24 +53,13 @@ btn.MouseButton1Click:Connect(function()
 end)
 
 -- ==========================================
--- SCRIPT DE DELIVERY
+-- SCRIPT DE DELIVERY CORRIGIDO
 -- ==========================================
-if getgenv().DeliveryScriptRunning then return end
-getgenv().DeliveryScriptRunning = true
-getgenv().DeliveryMode = getgenv().DeliveryMode or "Easy"
-
--- Força o script a começar pegando o trabalho, ignorando âncoras falsas
-getgenv().JobPhase = "Pickup" 
-
-addLog("Iniciando script de Delivery (Com Máquina de Estados)...")
+addLog("Iniciando NOVO script (Anti-Queda e Loop Fix)...")
 
 local function fireRemote(name, ...)
     local remote = remotes:FindFirstChild(name)
-    if not remote then 
-        addLog("[ERRO] Remote NÃO encontrado: " .. name)
-        return 
-    end
-
+    if not remote then return end
     if remote:IsA("RemoteEvent") then
         pcall(remote.FireServer, remote, ...)
     elseif remote:IsA("RemoteFunction") then
@@ -83,10 +78,17 @@ local function getRoot()
     return char:FindFirstChild("HumanoidRootPart")
 end
 
-task.spawn(function()
+-- Função segura de teleporte (Congela o boneco no ar)
+local function teleportSafe(root, pos)
+    root.Velocity = Vector3.zero
+    root.AssemblyLinearVelocity = Vector3.zero
+    root.CFrame = CFrame.new(pos + Vector3.new(0, 10, 0)) -- Mais alto pra garantir
+    root.Anchored = true -- Congela no ar
+end
+
+getgenv().DeliveryLoop = task.spawn(function()
     while task.wait(1) do
         if not getgenv().AutoFarmDelivery then
-            getgenv().DeliveryScriptRunning = false
             addLog("AutoFarm desligado.")
             break
         end
@@ -95,7 +97,7 @@ task.spawn(function()
         if not root then continue end
 
         if getgenv().JobPhase == "Pickup" then
-            addLog("[FASE 1] Procurando prancheta de trabalho...")
+            addLog("[FASE 1] Procurando prancheta...")
             local jobPad = nil
             for _, v in pairs(ws:GetDescendants()) do
                 if v:IsA("ProximityPrompt") and v.Name == "JobPadPrompt" then
@@ -105,11 +107,8 @@ task.spawn(function()
             end
 
             if jobPad then
-                addLog("[FASE 1] Prancheta encontrada. Pegando trabalho...")
-                local padPos = jobPad.Parent.Position
-                root.Velocity = Vector3.zero
-                root.AssemblyLinearVelocity = Vector3.zero
-                root.CFrame = CFrame.new(padPos + Vector3.new(0, 5, 0))
+                addLog("[FASE 1] Teleportando e ancorando no ar...")
+                teleportSafe(root, jobPad.Parent.Position)
                 task.wait(1)
                 
                 pcall(function() fireproximityprompt(jobPad) end)
@@ -121,33 +120,31 @@ task.spawn(function()
                 task.wait(0.5)
                 fireRemote("AttemptDeliveryPickup")
                 
-                addLog("[FASE 1] Trabalho solicitado. Mudando para Fase de Entrega.")
                 task.wait(2)
+                root.Anchored = false -- Descongela
+                addLog("[FASE 1] Trabalho pego! Mudando pra Fase 2.")
                 
-                -- Agora sim ele tem permissão para procurar o alvo
                 getgenv().JobPhase = "Deliver"
             else
-                addLog("[ERRO] Nenhuma prancheta encontrada no mapa.")
+                addLog("[ERRO] Prancheta não encontrada.")
             end
 
         elseif getgenv().JobPhase == "Deliver" then
             local target = ws:FindFirstChild("DeliveryTargetAnchor")
             
             if target and target.Parent == ws then
-                addLog("[FASE 2] Alvo encontrado. Realizando entrega...")
-                root.Velocity = Vector3.zero
-                root.AssemblyLinearVelocity = Vector3.zero
-                root.CFrame = CFrame.new(target.Position + Vector3.new(0, 5, 0))
+                addLog("[FASE 2] Alvo encontrado. Teleportando...")
+                teleportSafe(root, target.Position)
                 task.wait(1)
                 
                 fireRemote("AttemptDeliveryComplete")
                 task.wait(1)
                 
-                addLog("[FASE 2] Entrega finalizada. Retornando para buscar mais.")
-                -- Volta para a fase 1 para pegar a próxima caixa
+                root.Anchored = false -- Descongela
+                addLog("[FASE 2] Entrega concluída! Retornando pra Fase 1.")
                 getgenv().JobPhase = "Pickup"
             else
-                addLog("[FASE 2] Aguardando o alvo de entrega aparecer...")
+                addLog("[FASE 2] Aguardando o alvo (a âncora verde) spawnar...")
             end
         end
     end
