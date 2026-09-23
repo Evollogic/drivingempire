@@ -1,58 +1,28 @@
 local ws = game:GetService("Workspace")
 local rs = game:GetService("ReplicatedStorage")
-local plyrs = game:GetService("Players")
-local lp = plyrs.LocalPlayer
+local lp = game:GetService("Players").LocalPlayer
 local remotes = rs:WaitForChild("Remotes")
 
--- ==========================================
--- CONFIGURAÇÕES DA ENTREGA
--- ==========================================
+-- Limpa versões antigas
 if getgenv().DeliveryLoop then pcall(task.cancel, getgenv().DeliveryLoop) end
 getgenv().DeliveryScriptRunning = false
 getgenv().AutoFarmDelivery = true
 getgenv().JobPhase = "Init" 
 getgenv().DeliveryMode = getgenv().DeliveryMode or "Easy"
 
--- TEMPO DE ESPERA NA ÂNCORA (Para o jogo pagar o valor cheio e não bugar)
--- Você pode ajustar isso no seu Hub depois!
-getgenv().DeliveryWaitTime = 12 
+-- ==========================================
+-- TEMPO DE DESCARGA (AJUSTE AQUI)
+-- ==========================================
+getgenv().TempoDescarga = 2 -- Segundos que ele fica na âncora descarregando
 
--- ==========================================
--- LOGS (Para monitoramento)
--- ==========================================
+-- LOGS
 getgenv().DeliveryLogs = {}
 local function addLog(msg)
-    local timeStr = tostring(os.date("%X"))
-    local logMsg = "[" .. timeStr .. "] " .. tostring(msg)
+    local logMsg = "[" .. tostring(os.date("%X")) .. "] " .. tostring(msg)
     print(logMsg)
     table.insert(getgenv().DeliveryLogs, logMsg)
 end
 
-local CoreGui = game:GetService("CoreGui")
-if CoreGui:FindFirstChild("CopyLogUI") then CoreGui.CopyLogUI:Destroy() end
-local sg = Instance.new("ScreenGui")
-sg.Name = "CopyLogUI"
-sg.Parent = CoreGui
-local btn = Instance.new("TextButton")
-btn.Size = UDim2.new(0, 150, 0, 40)
-btn.Position = UDim2.new(0.5, -75, 0, 10)
-btn.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
-btn.TextColor3 = Color3.fromRGB(255, 255, 255)
-btn.TextScaled = true
-btn.Text = "📋 Copiar Logs"
-btn.Parent = sg
-btn.MouseButton1Click:Connect(function()
-    if setclipboard then
-        setclipboard(table.concat(getgenv().DeliveryLogs, "\n"))
-        btn.Text = "✅ Copiado!"
-        task.wait(1.5)
-        btn.Text = "📋 Copiar Logs"
-    end
-end)
-
--- ==========================================
--- FUNÇÕES PRINCIPAIS
--- ==========================================
 local function fireRemote(name, ...)
     local remote = remotes:FindFirstChild(name)
     if not remote then return end
@@ -63,50 +33,36 @@ local function fireRemote(name, ...)
     end
 end
 
-local function getRoot()
-    return lp.Character and lp.Character:FindFirstChild("HumanoidRootPart")
-end
-
-local function teleportSafe(root, pos)
-    root.Velocity = Vector3.zero
-    root.AssemblyLinearVelocity = Vector3.zero
-    root.CFrame = CFrame.new(pos + Vector3.new(0, 3, 0)) 
-end
-
-local function getJobPad()
-    for _, v in pairs(ws:GetDescendants()) do
-        if v:IsA("ProximityPrompt") and v.Name == "JobPadPrompt" then
-            return v
-        end
+local function teleportSafe(pos)
+    local char = lp.Character
+    local root = char and char:FindFirstChild("HumanoidRootPart")
+    if root then
+        root.Velocity = Vector3.zero
+        root.AssemblyLinearVelocity = Vector3.zero
+        root.CFrame = CFrame.new(pos + Vector3.new(0, 3, 0))
     end
-    return nil
 end
 
--- ==========================================
--- LOOP DE 3 FASES (100% REMOTO NA COLETA)
--- ==========================================
-addLog("Iniciando versão: Coleta Remota + Timer de Espera...")
+addLog("Iniciando Delivery Direto (Só Tempo de Descarga)...")
 
 getgenv().DeliveryLoop = task.spawn(function()
-    while task.wait(0.8) do
-        if not getgenv().AutoFarmDelivery then
-            addLog("AutoFarm desligado.")
-            break
-        end
-
-        local root = getRoot()
-        if not root then continue end
-
-        -- PASSO 1: INICIA O EXPEDIENTE (Apenas 1x)
+    while task.wait(0.5) do
+        if not getgenv().AutoFarmDelivery then break end
+        
+        -- PASSO 1: INICIA O TRABALHO (UMA VEZ SÓ NA VIDA)
         if getgenv().JobPhase == "Init" then
-            addLog("[INIT] Iniciando expediente...")
-            local jobPad = getJobPad()
+            local jobPad = nil
+            for _, v in pairs(ws:GetDescendants()) do
+                if v:IsA("ProximityPrompt") and v.Name == "JobPadPrompt" then
+                    jobPad = v
+                    break
+                end
+            end
             
             if jobPad then
-                -- Opcional: Se o seu executor aceita fireproximityprompt de longe,
-                -- você pode até apagar essa linha de teleportSafe abaixo no futuro!
-                teleportSafe(root, jobPad.Parent.Position)
-                task.wait(0.5)
+                addLog("[INIT] Configurando o expediente 1x...")
+                teleportSafe(jobPad.Parent.Position)
+                task.wait(1)
                 
                 pcall(function() fireproximityprompt(jobPad) end)
                 task.wait(0.5)
@@ -114,39 +70,31 @@ getgenv().DeliveryLoop = task.spawn(function()
                 fireRemote("SetDeliveryMode", getgenv().DeliveryMode)
                 task.wait(0.5)
                 fireRemote("RequestStartJobSession", "Delivery")
+                task.wait(0.5)
+                fireRemote("AttemptDeliveryPickup") -- Pega a 1ª caixa
                 
-                task.wait(1)
-                getgenv().JobPhase = "Pickup"
+                task.wait(1.5)
+                getgenv().JobPhase = "Farming"
             end
 
-        -- PASSO 2: PEGA A CAIXA (VIA DE LONGE)
-        elseif getgenv().JobPhase == "Pickup" then
-            addLog("[COLETA] Solicitando caixa via satélite (sem voltar)...")
-            
-            -- Não voltamos para a base! Apenas mandamos o sinal pro servidor.
-            fireRemote("AttemptDeliveryPickup")
-            
-            task.wait(1.5) -- Tempo pro servidor processar e colocar a âncora no mapa
-            getgenv().JobPhase = "Deliver"
-
-        -- PASSO 3: ENTREGA A CAIXA (COM TIMER)
-        elseif getgenv().JobPhase == "Deliver" then
+        -- PASSO 2: LOOP INFINITO NAS ÂNCORAS
+        elseif getgenv().JobPhase == "Farming" then
             local target = ws:FindFirstChild("DeliveryTargetAnchor")
             
             if target and target.Parent == ws then
-                addLog("[ENTREGA] Âncora encontrada. Teleportando...")
-                teleportSafe(root, target.Position)
+                addLog("[ENTREGA] Âncora achada! Teleportando...")
+                teleportSafe(target.Position)
                 
-                -- Aguarda o tempo necessário para o jogo validar o trajeto/dinheiro
-                addLog("[TIMER] Aguardando " .. getgenv().DeliveryWaitTime .. "s para burlar anti-cheat/ganhar máximo...")
-                task.wait(getgenv().DeliveryWaitTime)
+                -- Fica parado descarregando a caixa
+                addLog("[DESCARGA] Descarregando pacote por " .. tostring(getgenv().TempoDescarga) .. "s...")
+                task.wait(getgenv().TempoDescarga)
                 
+                -- Termina a entrega
                 fireRemote("AttemptDeliveryComplete")
+                addLog("[ENTREGA] Dinheiro no bolso!")
                 
-                task.wait(0.8)
-                getgenv().JobPhase = "Pickup" -- Pula direto pra pegar outra sem voltar!
-            else
-                addLog("[ENTREGA] Procurando âncora verde...")
+                -- Aguarda a âncora velha sumir e a nova aparecer sozinha
+                task.wait(1.5)
             end
         end
     end
