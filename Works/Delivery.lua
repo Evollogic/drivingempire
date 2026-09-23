@@ -4,6 +4,11 @@ local remotes=rs:WaitForChild("Remotes")
 if getgenv().DeliveryLoop then pcall(task.cancel,getgenv().DeliveryLoop) end
 getgenv().AutoFarmDelivery,getgenv().JobPhase=true,"Init"
 
+-- Função de Randomização para evitar Anti-Cheat (ex: 7.4s, 14.2s, 3.1s)
+local function rWait(min, max)
+    task.wait(math.random(min * 10, max * 10) / 10)
+end
+
 local function fRem(n,...)
     local r=remotes:FindFirstChild(n)
     if not r then return end
@@ -39,13 +44,13 @@ getgenv().DeliveryLoop=task.spawn(function()
                     rt.Velocity,rt.AssemblyLinearVelocity=Vector3.zero,Vector3.zero
                     rt.CFrame=CFrame.new(pad.Parent.Position+Vector3.new(0,50,0))
                 end
-                task.wait(1)
+                rWait(1, 1.5)
                 fRem("RequestStartJobSession", "Delivery", "jobPad", mode)
-                task.wait(1)
+                rWait(1, 1.5)
                 fRem("AttemptDeliveryPickup")
                 
-                -- 7 segundos de espera na primeira coleta
-                task.wait(7)
+                -- Coleta inicial aleatória (7 a 16 segundos)
+                rWait(7, 16)
                 getgenv().JobPhase="Farming"
             end
 
@@ -66,14 +71,14 @@ getgenv().DeliveryLoop=task.spawn(function()
                     task.wait(0.5)
                 end
                 
-                -- 1 segundo de espera na entrega cravado
-                task.wait(1)
+                -- Entrega aleatória (1 a 5 segundos)
+                rWait(1, 5)
                 
                 -- Pede a próxima caixa de longe
                 fRem("AttemptDeliveryPickup")
                 
-                -- 7 segundos de espera na coleta da próxima caixa
-                task.wait(7)
+                -- Coleta da próxima caixa aleatória (7 a 16 segundos)
+                rWait(7, 16)
             end
         end
     end
