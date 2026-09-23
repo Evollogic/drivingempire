@@ -12,7 +12,8 @@ task.spawn(function()
     local function getRoot()
         local char = lp.Character
         if not char then return nil end
-        -- Remove do carro para não bugar teleporte
+        
+        -- Sai do carro imediatamente
         local hum = char:FindFirstChild("Humanoid")
         if hum and hum.Sit then
             hum.Sit = false
@@ -21,52 +22,69 @@ task.spawn(function()
         return char:FindFirstChild("HumanoidRootPart")
     end
 
-    -- Cria a Plataforma Plana (Vermelha para você ver que está funcionando)
-    local plat = Instance.new("Part")
-    plat.Size = Vector3.new(40, 2, 40)
-    plat.Anchored = true
-    plat.Transparency = 0.5
-    plat.CanCollide = true
-    plat.Material = Enum.Material.Neon
-    plat.Color = Color3.new(1, 0, 0)
-    plat.Name = "SafePlat"
+    -- Função que limpa tudo quando você desliga o farm
+    local function cleanUp()
+        local root = getRoot()
+        if root then
+            local bv = root:FindFirstChild("AntiFall_Delivery")
+            if bv then bv:Destroy() end
+        end
+        if lp.Character then
+            for _, v in pairs(lp.Character:GetDescendants()) do
+                if v:IsA("BasePart") then v.CanCollide = true end
+            end
+        end
+    end
 
-    while task.wait(0.5) do
+    while task.wait(0.3) do
         if not getgenv().AutoFarmDelivery then
-            plat.Parent = nil
+            cleanUp()
             getgenv().DeliveryScriptRunning = false
             break
         end
 
-        plat.Parent = ws
         local root = getRoot()
         if not root then continue end
+        local char = lp.Character
+
+        -- ==============================================
+        -- 1. NOCLIP: ATRAVESSAR TUDO
+        -- ==============================================
+        -- Desliga a colisão de todas as partes do seu corpo.
+        -- Se o jogo te jogar no meio da terra, você não buga, você atravessa.
+        for _, v in pairs(char:GetDescendants()) do
+            if v:IsA("BasePart") then
+                v.CanCollide = false
+            end
+        end
+
+        -- ==============================================
+        -- 2. BODYVELOCITY: FORÇA ANTI-GRAVIDADE (VOO INVISÍVEL)
+        -- ==============================================
+        -- Substitui a plataforma. Segura o jogador congelado no ar.
+        local bv = root:FindFirstChild("AntiFall_Delivery")
+        if not bv then
+            bv = Instance.new("BodyVelocity")
+            bv.Name = "AntiFall_Delivery"
+            bv.MaxForce = Vector3.new(9e9, 9e9, 9e9) -- Força infinita
+            bv.Velocity = Vector3.new(0, 0, 0) -- Velocidade zero = Flutuar parado
+            bv.Parent = root
+        end
 
         local target = ws:FindFirstChild("DeliveryTargetAnchor")
 
         if target and target.Parent == ws then
-            -- ==============================================
-            -- 1. FAZENDO A ENTREGA
-            -- ==============================================
             local pos = target.Position
-            -- Plataforma 2 studs acima do chão, sem inclinação
-            plat.CFrame = CFrame.new(pos.X, pos.Y + 2, pos.Z)
             
-            -- Jogador 5 studs acima (cai em pé na plataforma)
-            root.Velocity = Vector3.new(0, 0, 0)
-            root.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
-            root.CFrame = CFrame.new(pos.X, pos.Y + 5, pos.Z)
-
-            -- Finaliza a entrega
+            -- Teleporta você DEZ metros (10 studs) acima do alvo. Totalmente imune ao chão.
+            root.CFrame = CFrame.new(pos.X, pos.Y + 10, pos.Z)
+            
             local complete = remotes:FindFirstChild("AttemptDeliveryComplete")
             if complete then
                 pcall(function() complete:InvokeServer() end)
                 pcall(function() complete:FireServer() end)
             end
         else
-            -- ==============================================
-            -- 2. INICIANDO O SERVIÇO NA PRANCHETA
-            -- ==============================================
             local jobPad = nil
             for _, v in pairs(ws:GetDescendants()) do
                 if v:IsA("ProximityPrompt") and v.Name == "JobPadPrompt" and v.Parent then
@@ -78,24 +96,18 @@ task.spawn(function()
             if jobPad then
                 local pos = jobPad.Position
                 
-                -- Plataforma 2 studs acima do chão
-                plat.CFrame = CFrame.new(pos.X, pos.Y + 2, pos.Z)
+                -- Fica DEZ metros acima da prancheta
+                root.CFrame = CFrame.new(pos.X, pos.Y + 10, pos.Z)
                 
-                -- Jogador cai em pé na plataforma
-                root.Velocity = Vector3.new(0, 0, 0)
-                root.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
-                root.CFrame = CFrame.new(pos.X, pos.Y + 5, pos.Z)
+                task.wait(0.4)
 
-                -- Pausa pro jogo carregar sua posição
-                task.wait(0.5)
-
-                -- 2.1 Manda a dificuldade (Easy/Hard)
+                -- Envia Dificuldade
                 local setMode = remotes:FindFirstChild("SetDeliveryMode")
                 if setMode then
                     pcall(function() setMode:FireServer(getgenv().DeliveryMode) end)
                 end
 
-                -- 2.2 Aciona a prancheta
+                -- Aciona o Prompt de longe (o max activation já está burlado pra 50)
                 for _, prompt in pairs(jobPad:GetDescendants()) do
                     if prompt:IsA("ProximityPrompt") then
                         prompt.MaxActivationDistance = 50
@@ -103,26 +115,25 @@ task.spawn(function()
                     end
                 end
 
-                task.wait(0.5)
+                task.wait(0.4)
 
-                -- 2.3 Começa a sessão
+                -- Inicia Serviço
                 local startRemote = remotes:FindFirstChild("RequestStartJobSession")
                 if startRemote then
                     pcall(function() startRemote:InvokeServer("Delivery", "jobPad", "Safe") end)
                     pcall(function() startRemote:FireServer("Delivery", "jobPad", "Safe") end)
                 end
 
-                task.wait(0.5)
+                task.wait(0.4)
 
-                -- 2.4 Pega o pacote
+                -- Pega pacote
                 local pickupRemote = remotes:FindFirstChild("AttemptDeliveryPickup")
                 if pickupRemote then
                     pcall(function() pickupRemote:InvokeServer() end)
                     pcall(function() pickupRemote:FireServer() end)
                 end
                 
-                -- Pausa pro alvo da entrega aparecer no mapa
-                task.wait(2)
+                task.wait(1.5)
             end
         end
     end
