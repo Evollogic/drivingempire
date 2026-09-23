@@ -5,17 +5,18 @@ local lp = plyrs.LocalPlayer
 local remotes = rs:WaitForChild("Remotes")
 
 -- ==========================================
--- DESTRÓI VERSÕES ANTIGAS DO SCRIPT
+-- DESTRÓI VERSÕES ANTIGAS
 -- ==========================================
 if getgenv().DeliveryLoop then
     pcall(task.cancel, getgenv().DeliveryLoop)
 end
+getgenv().DeliveryScriptRunning = false
 getgenv().AutoFarmDelivery = true
-getgenv().JobPhase = "Pickup" 
+getgenv().JobPhase = "Init" 
 getgenv().DeliveryMode = getgenv().DeliveryMode or "Easy"
 
 -- ==========================================
--- SISTEMA DE LOGS UI
+-- LOGS (Para monitoramento)
 -- ==========================================
 getgenv().DeliveryLogs = {}
 local function addLog(msg)
@@ -29,11 +30,9 @@ local CoreGui = game:GetService("CoreGui")
 if CoreGui:FindFirstChild("CopyLogUI") then
     CoreGui.CopyLogUI:Destroy()
 end
-
 local sg = Instance.new("ScreenGui")
 sg.Name = "CopyLogUI"
 sg.Parent = CoreGui
-
 local btn = Instance.new("TextButton")
 btn.Size = UDim2.new(0, 150, 0, 40)
 btn.Position = UDim2.new(0.5, -75, 0, 10)
@@ -42,7 +41,6 @@ btn.TextColor3 = Color3.fromRGB(255, 255, 255)
 btn.TextScaled = true
 btn.Text = "📋 Copiar Logs"
 btn.Parent = sg
-
 btn.MouseButton1Click:Connect(function()
     if setclipboard then
         setclipboard(table.concat(getgenv().DeliveryLogs, "\n"))
@@ -53,10 +51,8 @@ btn.MouseButton1Click:Connect(function()
 end)
 
 -- ==========================================
--- SCRIPT DE DELIVERY CORRIGIDO
+-- FUNÇÕES PRINCIPAIS (Sem frescura no Humanoid)
 -- ==========================================
-addLog("Iniciando NOVO script (Anti-Queda e Loop Fix)...")
-
 local function fireRemote(name, ...)
     local remote = remotes:FindFirstChild(name)
     if not remote then return end
@@ -70,24 +66,34 @@ end
 local function getRoot()
     local char = lp.Character
     if not char then return nil end
-    local hum = char:FindFirstChild("Humanoid")
-    if hum and hum.Sit then
-        hum.Sit = false
-        task.wait(0.2)
-    end
+    -- Removida QUALQUER alteração de Humanoid (nada de Sit = false)
     return char:FindFirstChild("HumanoidRootPart")
 end
 
--- Função segura de teleporte (Congela o boneco no ar)
 local function teleportSafe(root, pos)
     root.Velocity = Vector3.zero
     root.AssemblyLinearVelocity = Vector3.zero
-    root.CFrame = CFrame.new(pos + Vector3.new(0, 10, 0)) -- Mais alto pra garantir
-    root.Anchored = true -- Congela no ar
+    -- Teleporta apenas 3 studs acima do alvo (o boneco toca o chão)
+    -- E não usa mais Anchored!
+    root.CFrame = CFrame.new(pos + Vector3.new(0, 3, 0)) 
 end
 
+local function getJobPad()
+    for _, v in pairs(ws:GetDescendants()) do
+        if v:IsA("ProximityPrompt") and v.Name == "JobPadPrompt" then
+            return v
+        end
+    end
+    return nil
+end
+
+-- ==========================================
+-- LOOP DE 3 FASES
+-- ==========================================
+addLog("Iniciando versão limpa (Sem Anchored e Sem Humanoid)...")
+
 getgenv().DeliveryLoop = task.spawn(function()
-    while task.wait(1) do
+    while task.wait(0.8) do
         if not getgenv().AutoFarmDelivery then
             addLog("AutoFarm desligado.")
             break
@@ -96,20 +102,13 @@ getgenv().DeliveryLoop = task.spawn(function()
         local root = getRoot()
         if not root then continue end
 
-        if getgenv().JobPhase == "Pickup" then
-            addLog("[FASE 1] Procurando prancheta...")
-            local jobPad = nil
-            for _, v in pairs(ws:GetDescendants()) do
-                if v:IsA("ProximityPrompt") and v.Name == "JobPadPrompt" then
-                    jobPad = v
-                    break
-                end
-            end
-
+        if getgenv().JobPhase == "Init" then
+            addLog("[INIT] Indo iniciar trabalho...")
+            local jobPad = getJobPad()
+            
             if jobPad then
-                addLog("[FASE 1] Teleportando e ancorando no ar...")
                 teleportSafe(root, jobPad.Parent.Position)
-                task.wait(1)
+                task.wait(0.5)
                 
                 pcall(function() fireproximityprompt(jobPad) end)
                 task.wait(0.5)
@@ -117,34 +116,39 @@ getgenv().DeliveryLoop = task.spawn(function()
                 fireRemote("SetDeliveryMode", getgenv().DeliveryMode)
                 task.wait(0.5)
                 fireRemote("RequestStartJobSession", "Delivery")
+                
+                task.wait(1)
+                getgenv().JobPhase = "Pickup"
+            end
+
+        elseif getgenv().JobPhase == "Pickup" then
+            addLog("[COLETA] Pegando a caixa...")
+            local jobPad = getJobPad()
+            
+            if jobPad then
+                teleportSafe(root, jobPad.Parent.Position)
                 task.wait(0.5)
+                
                 fireRemote("AttemptDeliveryPickup")
                 
-                task.wait(2)
-                root.Anchored = false -- Descongela
-                addLog("[FASE 1] Trabalho pego! Mudando pra Fase 2.")
-                
+                task.wait(1.5)
                 getgenv().JobPhase = "Deliver"
-            else
-                addLog("[ERRO] Prancheta não encontrada.")
             end
 
         elseif getgenv().JobPhase == "Deliver" then
             local target = ws:FindFirstChild("DeliveryTargetAnchor")
             
             if target and target.Parent == ws then
-                addLog("[FASE 2] Alvo encontrado. Teleportando...")
+                addLog("[ENTREGA] Alvo na mira...")
                 teleportSafe(root, target.Position)
-                task.wait(1)
+                task.wait(0.5)
                 
                 fireRemote("AttemptDeliveryComplete")
-                task.wait(1)
                 
-                root.Anchored = false -- Descongela
-                addLog("[FASE 2] Entrega concluída! Retornando pra Fase 1.")
+                task.wait(0.8)
                 getgenv().JobPhase = "Pickup"
             else
-                addLog("[FASE 2] Aguardando o alvo (a âncora verde) spawnar...")
+                addLog("[ENTREGA] Procurando âncora verde...")
             end
         end
     end
