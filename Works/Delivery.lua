@@ -8,7 +8,6 @@ local remotes = rs:WaitForChild("Remotes")
 -- SISTEMA DE LOGS E BOTÃO DE COPIAR
 -- ==========================================
 getgenv().DeliveryLogs = {}
-
 local function addLog(msg)
     local timeStr = tostring(os.date("%X"))
     local logMsg = "[" .. timeStr .. "] " .. tostring(msg)
@@ -16,7 +15,6 @@ local function addLog(msg)
     table.insert(getgenv().DeliveryLogs, logMsg)
 end
 
--- Cria o botão na tela
 local CoreGui = game:GetService("CoreGui")
 if CoreGui:FindFirstChild("CopyLogUI") then
     CoreGui.CopyLogUI:Destroy()
@@ -28,7 +26,7 @@ sg.Parent = CoreGui
 
 local btn = Instance.new("TextButton")
 btn.Size = UDim2.new(0, 150, 0, 40)
-btn.Position = UDim2.new(0.5, -75, 0, 10) -- Fica no topo da tela
+btn.Position = UDim2.new(0.5, -75, 0, 10)
 btn.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
 btn.TextColor3 = Color3.fromRGB(255, 255, 255)
 btn.TextScaled = true
@@ -41,13 +39,10 @@ uicorner.Parent = btn
 
 btn.MouseButton1Click:Connect(function()
     if setclipboard then
-        local allLogs = table.concat(getgenv().DeliveryLogs, "\n")
-        setclipboard(allLogs)
+        setclipboard(table.concat(getgenv().DeliveryLogs, "\n"))
         btn.Text = "✅ Copiado!"
         task.wait(1.5)
         btn.Text = "📋 Copiar Logs"
-    else
-        btn.Text = "❌ Erro: Sem setclipboard"
     end
 end)
 
@@ -58,7 +53,10 @@ if getgenv().DeliveryScriptRunning then return end
 getgenv().DeliveryScriptRunning = true
 getgenv().DeliveryMode = getgenv().DeliveryMode or "Easy"
 
-addLog("Iniciando script de Delivery...")
+-- Força o script a começar pegando o trabalho, ignorando âncoras falsas
+getgenv().JobPhase = "Pickup" 
+
+addLog("Iniciando script de Delivery (Com Máquina de Estados)...")
 
 local function fireRemote(name, ...)
     local remote = remotes:FindFirstChild(name)
@@ -68,10 +66,8 @@ local function fireRemote(name, ...)
     end
 
     if remote:IsA("RemoteEvent") then
-        addLog("[OK] FireServer -> " .. name)
         pcall(remote.FireServer, remote, ...)
     elseif remote:IsA("RemoteFunction") then
-        addLog("[OK] InvokeServer -> " .. name)
         task.spawn(pcall, remote.InvokeServer, remote, ...)
     end
 end
@@ -91,24 +87,15 @@ task.spawn(function()
     while task.wait(1) do
         if not getgenv().AutoFarmDelivery then
             getgenv().DeliveryScriptRunning = false
-            addLog("AutoFarmDelivery desligado, parando loop.")
+            addLog("AutoFarm desligado.")
             break
         end
 
         local root = getRoot()
         if not root then continue end
 
-        local target = ws:FindFirstChild("DeliveryTargetAnchor")
-        
-        if target and target.Parent == ws then
-            addLog("[STATUS] Alvo de entrega encontrado! Finalizando...")
-            root.Velocity = Vector3.zero
-            root.AssemblyLinearVelocity = Vector3.zero
-            root.CFrame = CFrame.new(target.Position + Vector3.new(0, 5, 0))
-            task.wait(0.5)
-            fireRemote("AttemptDeliveryComplete")
-        else
-            addLog("[STATUS] Sem caixa. Procurando JobPadPrompt...")
+        if getgenv().JobPhase == "Pickup" then
+            addLog("[FASE 1] Procurando prancheta de trabalho...")
             local jobPad = nil
             for _, v in pairs(ws:GetDescendants()) do
                 if v:IsA("ProximityPrompt") and v.Name == "JobPadPrompt" then
@@ -118,27 +105,49 @@ task.spawn(function()
             end
 
             if jobPad then
-                addLog("[STATUS] JobPad encontrado. Teleportando...")
+                addLog("[FASE 1] Prancheta encontrada. Pegando trabalho...")
                 local padPos = jobPad.Parent.Position
                 root.Velocity = Vector3.zero
                 root.AssemblyLinearVelocity = Vector3.zero
                 root.CFrame = CFrame.new(padPos + Vector3.new(0, 5, 0))
                 task.wait(1)
                 
-                addLog("[STATUS] Ativando ProximityPrompt da prancheta...")
-                local s, e = pcall(function() fireproximityprompt(jobPad) end)
-                if not s then addLog("[ERRO] Falha no fireproximityprompt: " .. tostring(e)) end
+                pcall(function() fireproximityprompt(jobPad) end)
                 task.wait(0.5)
                 
-                addLog("[STATUS] Solicitando o trabalho ao servidor...")
                 fireRemote("SetDeliveryMode", getgenv().DeliveryMode)
                 task.wait(0.5)
                 fireRemote("RequestStartJobSession", "Delivery")
                 task.wait(0.5)
                 fireRemote("AttemptDeliveryPickup")
+                
+                addLog("[FASE 1] Trabalho solicitado. Mudando para Fase de Entrega.")
                 task.wait(2)
+                
+                -- Agora sim ele tem permissão para procurar o alvo
+                getgenv().JobPhase = "Deliver"
             else
-                addLog("[AVISO] Nenhum JobPadPrompt encontrado no Workspace!")
+                addLog("[ERRO] Nenhuma prancheta encontrada no mapa.")
+            end
+
+        elseif getgenv().JobPhase == "Deliver" then
+            local target = ws:FindFirstChild("DeliveryTargetAnchor")
+            
+            if target and target.Parent == ws then
+                addLog("[FASE 2] Alvo encontrado. Realizando entrega...")
+                root.Velocity = Vector3.zero
+                root.AssemblyLinearVelocity = Vector3.zero
+                root.CFrame = CFrame.new(target.Position + Vector3.new(0, 5, 0))
+                task.wait(1)
+                
+                fireRemote("AttemptDeliveryComplete")
+                task.wait(1)
+                
+                addLog("[FASE 2] Entrega finalizada. Retornando para buscar mais.")
+                -- Volta para a fase 1 para pegar a próxima caixa
+                getgenv().JobPhase = "Pickup"
+            else
+                addLog("[FASE 2] Aguardando o alvo de entrega aparecer...")
             end
         end
     end
