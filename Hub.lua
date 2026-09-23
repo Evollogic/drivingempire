@@ -13,7 +13,7 @@ local function checkForUpdates()
     if getgenv().UpdatingHub then return false end
     local urlAntiCache = VERSION_URL .. "?t=" .. tostring(os.time())
     local success, latestVersion = pcall(function() return game:HttpGet(urlAntiCache) end)
-    
+
     if success and latestVersion then
         latestVersion = string.match(latestVersion, "%d+%.%d+")
         if latestVersion and latestVersion ~= CURRENT_VERSION then
@@ -202,7 +202,7 @@ tabContainer.Position = UDim2.new(0, 0, 0, 35)
 tabContainer.BackgroundColor3 = Color3.fromRGB(30, 30, 35)
 tabContainer.BorderSizePixel = 0
 tabContainer.Parent = mainFrame
-                                                                   
+
 local tabFarm = Instance.new("TextButton")
 tabFarm.Size = UDim2.new(0.5, 0, 1, 0)
 tabFarm.BackgroundColor3 = Color3.fromRGB(50, 100, 200)
@@ -264,7 +264,7 @@ local farmLayout = Instance.new("UIListLayout")
 farmLayout.Padding = UDim.new(0, 10)
 farmLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
 farmLayout.Parent = farmPage
-local farmPadding = Instance.new("UIPadding")                      
+local farmPadding = Instance.new("UIPadding")
 farmPadding.PaddingTop = UDim.new(0, 15)
 farmPadding.Parent = farmPage
 
@@ -281,9 +281,6 @@ local function createToggle(name, parent, sizeY)
     return btn
 end
 
--- ==========================================
--- BOTÃO DE DIFICULDADE (EASY/HARD)
--- ==========================================
 getgenv().DeliveryMode = cfg.deliveryMode
 local modeBtn = createToggle("Dificuldade", farmPage, 35)
 modeBtn.Text = "Modo: " .. cfg.deliveryMode
@@ -302,25 +299,22 @@ modeBtn.MouseButton1Click:Connect(function()
     saveCfg()
 end)
 
--- ==========================================
--- BOTÃO ENTREGADOR PRINCIPAL
--- ==========================================
-local deliveryToggleBtn = createToggle("Entregador", farmPage, 45)     
-getgenv().AutoFarmDelivery = cfg.delivery 
+local deliveryToggleBtn = createToggle("Entregador", farmPage, 45) 
+getgenv().AutoFarmDelivery = cfg.delivery
 getgenv().DeliveryInitialPosition = nil
 
-local function getRoot() 
-    return lp.Character and lp.Character:FindFirstChild("HumanoidRootPart") 
+local function getRoot()
+    return lp.Character and lp.Character:FindFirstChild("HumanoidRootPart")
 end
 
 local function updateDeliveryUI()
     if getgenv().AutoFarmDelivery then
         deliveryToggleBtn.BackgroundColor3 = Color3.fromRGB(50, 200, 50)
         deliveryToggleBtn.Text = "Entregador: LIGADO"
-        
+
         local root = getRoot()
         if root then getgenv().DeliveryInitialPosition = root.CFrame end
-        
+
         pcall(function()
             local url = "https://raw.githubusercontent.com/Evollogic/drivingempire/main/Works/Delivery.lua?t=" .. tostring(os.time())
             loadstring(game:HttpGet(url))()
@@ -328,7 +322,7 @@ local function updateDeliveryUI()
     else
         deliveryToggleBtn.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
         deliveryToggleBtn.Text = "Entregador: DESLIGADO"
-        
+
         local root = getRoot()
         if root and getgenv().DeliveryInitialPosition then
             root.Velocity = Vector3.new(0,0,0)
@@ -341,7 +335,7 @@ end
 deliveryToggleBtn.MouseButton1Click:Connect(function()
     getgenv().AutoFarmDelivery = not getgenv().AutoFarmDelivery
     cfg.delivery = getgenv().AutoFarmDelivery
-    saveCfg() 
+    saveCfg()
     updateDeliveryUI()
 end)
 
@@ -354,40 +348,38 @@ if getgenv().AutoFarmDelivery then
 end
 
 -- ==========================================
--- ARRASTAR TELA
+-- ARRASTAR TELA (CORRIGIDO PARA MOBILE)
 -- ==========================================
-local function makeDraggable(inputObject, objectToMove)
-    local dragging, dragInput, dragStart, startPos
+local function makeDraggable(dragPoint, dragTarget)
+    local dragging = false
+    local dragStart = nil
+    local startPos = nil
 
-    inputObject.InputBegan:Connect(function(input)
+    dragPoint.InputBegan:Connect(function(input)
         if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
             dragging = true
             dragStart = input.Position
-            startPos = objectToMove.AbsolutePosition
+            startPos = dragTarget.AbsolutePosition
+        end
+    end)
 
-            input.Changed:Connect(function()
-                if input.UserInputState == Enum.UserInputState.End then dragging = false end
-            end)
-        end
-    end)
-    
-    inputObject.InputChanged:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
-            dragInput = input
-        end
-    end)
-    
     uis.InputChanged:Connect(function(input)
-        if input == dragInput and dragging then
+        if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
             local delta = input.Position - dragStart
             local screenSize = sg.AbsoluteSize
-            local objSize = objectToMove.AbsoluteSize              
-            local newX = startPos.X + delta.X
-            local newY = startPos.Y + delta.Y
+            local objSize = dragTarget.AbsoluteSize
+            
+            -- Clamps impedem que saia da tela
+            local newX = math.clamp(startPos.X + delta.X, 0, screenSize.X - objSize.X)
+            local newY = math.clamp(startPos.Y + delta.Y, 0, screenSize.Y - objSize.Y)
+            
+            dragTarget.Position = UDim2.new(0, newX, 0, newY)
+        end
+    end)
 
-            newX = math.clamp(newX, 0, screenSize.X - objSize.X)
-            newY = math.clamp(newY, 0, screenSize.Y - objSize.Y)   
-            objectToMove.Position = UDim2.new(0, newX, 0, newY)
+    uis.InputEnded:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            dragging = false
         end
     end)
 end
