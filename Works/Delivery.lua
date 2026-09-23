@@ -9,28 +9,31 @@ getgenv().DeliveryScriptRunning = true
 getgenv().DeliveryMode = getgenv().DeliveryMode or "Easy"
 
 -- ========================================================
--- O MEU ERRO ESTAVA AQUI: Essa função agora garante que
--- o comando certo (FireServer ou InvokeServer) seja usado!
+-- CORREÇÃO DEFINITIVA: Checa a classe corretamente e usa 
+-- task.spawn no InvokeServer para o script nunca congelar.
+-- A sintaxe otimizada garante que os parâmetros (...) não se percam.
 -- ========================================================
 local function fireRemote(name, ...)
     local remote = remotes:FindFirstChild(name)
     if not remote then return end
-    
+
     if remote:IsA("RemoteEvent") then
-        pcall(function() remote:FireServer(...) end)
+        pcall(remote.FireServer, remote, ...)
     elseif remote:IsA("RemoteFunction") then
-        pcall(function() remote:InvokeServer(...) end)
+        task.spawn(pcall, remote.InvokeServer, remote, ...)
     end
 end
 
 local function getRoot()
     local char = lp.Character
     if not char then return nil end
+    
     local hum = char:FindFirstChild("Humanoid")
     if hum and hum.Sit then
         hum.Sit = false
         task.wait(0.2)
     end
+    
     return char:FindFirstChild("HumanoidRootPart")
 end
 
@@ -45,7 +48,7 @@ task.spawn(function()
         if not root then continue end
 
         local target = ws:FindFirstChild("DeliveryTargetAnchor")
-
+        
         if target and target.Parent == ws then
             -- 1. FINALIZA ENTREGA
             root.Velocity = Vector3.zero
@@ -70,7 +73,6 @@ task.spawn(function()
                 root.Velocity = Vector3.zero
                 root.AssemblyLinearVelocity = Vector3.zero
                 root.CFrame = CFrame.new(padPos + Vector3.new(0, 5, 0))
-                
                 task.wait(1) -- Tempo pro servidor registrar
                 
                 -- Aciona a prancheta
@@ -80,12 +82,9 @@ task.spawn(function()
                 -- Envia as ordens com a correção definitiva
                 fireRemote("SetDeliveryMode", getgenv().DeliveryMode)
                 task.wait(0.5)
-                
                 fireRemote("RequestStartJobSession", "Delivery")
                 task.wait(0.5)
-                
                 fireRemote("AttemptDeliveryPickup")
-                
                 task.wait(2) -- Aguarda a caixa aparecer nas costas
             end
         end
