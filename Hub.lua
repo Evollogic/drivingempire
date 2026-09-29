@@ -6,9 +6,11 @@ local http = game:GetService("HttpService")
 local teleportService = game:GetService("TeleportService")
 local lp = plyrs.LocalPlayer
 
-local CURRENT_VERSION = "2.1"
+local CURRENT_VERSION = "2.2"
 local VERSION_URL = "https://raw.githubusercontent.com/Evollogic/drivingempire/main/version.txt"
 local SCRIPT_URL = "https://raw.githubusercontent.com/Evollogic/drivingempire/main/Hub.lua"
+
+local MAIN_GAME_ID = 3351674303 
 
 local configName = "EmpireConfig.json"
 local cfg = { delivery = false, deliveryMode = "Easy", autoHop = false }
@@ -168,7 +170,6 @@ local function createToggle(name, parent, sizeY)
     return btn
 end
 
--- MODO DE DIFICULDADE
 getgenv().DeliveryMode = cfg.deliveryMode
 local modeBtn = createToggle("Dificuldade", farmPage, 35)
 modeBtn.Text = "Modo: " .. cfg.deliveryMode
@@ -181,7 +182,6 @@ modeBtn.MouseButton1Click:Connect(function()
     saveCfg()
 end)
 
--- TOGGLE ENTREGADOR
 local deliveryToggleBtn = createToggle("Entregador", farmPage, 45)
 getgenv().AutoFarmDelivery = cfg.delivery
 getgenv().DeliveryInitialPosition = nil
@@ -214,7 +214,6 @@ deliveryToggleBtn.MouseButton1Click:Connect(function()
 end)
 if getgenv().AutoFarmDelivery then task.spawn(function() if not lp.Character then lp.CharacterAdded:Wait() end task.wait(1) updateDeliveryUI() end) end
 
--- TOGGLE AUTO-HOP (AGORA FUNCIONAL)
 local autoHopToggleBtn = createToggle("Auto-Hop (Sair AFK)", farmPage, 45)
 getgenv().AutoHopState = cfg.autoHop
 
@@ -236,7 +235,6 @@ autoHopToggleBtn.MouseButton1Click:Connect(function()
 end)
 updateHopUI()
 
--- SISTEMA DE ARRASTAR
 local function makeDraggable(dragPoint, dragTarget)
     local dragging, dragStart, startPos = false, nil, nil
     dragPoint.InputBegan:Connect(function(input)
@@ -256,7 +254,6 @@ local function makeDraggable(dragPoint, dragTarget)
 end
 makeDraggable(mainFrame, mainFrame); makeDraggable(topBar, mainFrame); makeDraggable(openBall, openBall)
 
--- BACKGROUND TASKS
 task.spawn(function()
     if not getgenv().AutoClaimRunning then
         getgenv().AutoClaimRunning = true
@@ -264,32 +261,31 @@ task.spawn(function()
     end
 end)
 
--- NOVO SISTEMA DE AUTO-HOP (PRECISO E SEM LOOP INFINITO)
 task.spawn(function()
     while task.wait(5) do
         if getgenv().AutoHopState then
             pcall(function()
-                local gui = lp.PlayerGui:FindFirstChild("HUD")
-                if gui then
-                    -- Busca os botões exatos em qualquer lugar dentro do HUD usando busca recursiva
-                    local afkBtn = gui:FindFirstChild("LeaveAFKServer", true)
-                    local matchBtn = gui:FindFirstChild("LeaveMatchmakingServer", true)
-                    
-                    -- Verifica se pelo menos um deles foi encontrado e está visível na tela
-                    if (afkBtn and afkBtn.Visible) or (matchBtn and matchBtn.Visible) then
-                        print("[Auto-Hop] Tela de AFK verificada com sucesso! Reconectando...")
-                        
-                        -- Tenta acionar o clique do botão nativamente (se o executor suportar)
-                        if getconnections then
-                            if afkBtn then for _, c in pairs(getconnections(afkBtn.MouseButton1Click)) do c:Fire() end end
-                            if matchBtn then for _, c in pairs(getconnections(matchBtn.MouseButton1Click)) do c:Fire() end end
+                local currentPlaceId = game.PlaceId
+                if currentPlaceId ~= MAIN_GAME_ID then
+                    print("[Auto-Hop] Detectado no servidor AFK/Matchmaking (" .. tostring(currentPlaceId) .. "). Voltando ao jogo principal...")
+                    teleportService:Teleport(MAIN_GAME_ID, lp)
+                    task.wait(15) 
+                else
+                    local gui = lp.PlayerGui:FindFirstChild("HUD")
+                    if gui then
+                        local afkBtn = gui:FindFirstChild("LeaveAFKServer", true)
+                        local matchBtn = gui:FindFirstChild("LeaveMatchmakingServer", true)
+
+                        if (afkBtn and afkBtn.Visible) or (matchBtn and matchBtn.Visible) then
+                            print("[Auto-Hop] Botão de saída detectado! Reconectando...")
+                            if getconnections then
+                                if afkBtn then for _, c in pairs(getconnections(afkBtn.MouseButton1Click)) do c:Fire() end end
+                                if matchBtn then for _, c in pairs(getconnections(matchBtn.MouseButton1Click)) do c:Fire() end end
+                            end
+                            task.wait(1)
+                            teleportService:Teleport(MAIN_GAME_ID, lp)
+                            task.wait(15)
                         end
-                        
-                        task.wait(1)
-                        
-                        -- Força o teleporte pelo serviço principal como garantia
-                        teleportService:Teleport(game.PlaceId, lp)
-                        task.wait(15) 
                     end
                 end
             end)
