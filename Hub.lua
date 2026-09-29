@@ -6,84 +6,12 @@ local http = game:GetService("HttpService")
 local teleportService = game:GetService("TeleportService")
 local lp = plyrs.LocalPlayer
 
-local CURRENT_VERSION = "1.9"
+local CURRENT_VERSION = "2.1"
 local VERSION_URL = "https://raw.githubusercontent.com/Evollogic/drivingempire/main/version.txt"
 local SCRIPT_URL = "https://raw.githubusercontent.com/Evollogic/drivingempire/main/Hub.lua"
 
-local function checkForUpdates()
-    if getgenv().UpdatingHub then return false end
-    local urlAntiCache = VERSION_URL .. "?t=" .. tostring(os.time())
-    local success, latestVersion = pcall(function() return game:HttpGet(urlAntiCache) end)
-
-    if success and latestVersion then
-        latestVersion = string.match(latestVersion, "%d+%.%d+")
-        if latestVersion and latestVersion ~= CURRENT_VERSION then
-            getgenv().UpdatingHub = true
-
-            for _, v in pairs(coreGui:GetChildren()) do
-                if v.Name == "PremiumHub" or v.Name == "UpdateHub" then v:Destroy() end
-            end
-
-            local updateGui = Instance.new("ScreenGui")
-            updateGui.Name = "UpdateHub"
-            updateGui.IgnoreGuiInset = true
-            pcall(function() updateGui.Parent = coreGui end)
-            if not updateGui.Parent then updateGui.Parent = lp:WaitForChild("PlayerGui") end
-
-            local updateFrame = Instance.new("Frame")
-            updateFrame.Size = UDim2.new(0, 250, 0, 120)
-            updateFrame.Position = UDim2.new(0.5, -125, 0.5, -60)
-            updateFrame.BackgroundColor3 = Color3.fromRGB(25, 25, 30)
-            updateFrame.BorderSizePixel = 0
-            updateFrame.Parent = updateGui
-            Instance.new("UICorner", updateFrame).CornerRadius = UDim.new(0, 10)
-
-            local updateTitle = Instance.new("TextLabel")
-            updateTitle.Size = UDim2.new(1, 0, 0, 30)
-            updateTitle.BackgroundTransparency = 1
-            updateTitle.Text = "Atualizando Hub..."
-            updateTitle.TextColor3 = Color3.fromRGB(255, 255, 255)
-            updateTitle.Font = Enum.Font.GothamBold
-            updateTitle.TextSize = 16
-            updateTitle.Parent = updateFrame
-
-            local barBG = Instance.new("Frame")
-            barBG.Size = UDim2.new(0.8, 0, 0, 8)
-            barBG.Position = UDim2.new(0.1, 0, 0.6, 0)
-            barBG.BackgroundColor3 = Color3.fromRGB(40, 40, 45)
-            barBG.Parent = updateFrame
-            Instance.new("UICorner", barBG).CornerRadius = UDim.new(1, 0)
-
-            local barFill = Instance.new("Frame")
-            barFill.Size = UDim2.new(0, 0, 1, 0)
-            barFill.BackgroundColor3 = Color3.fromRGB(50, 150, 255)
-            barFill.Parent = barBG
-            Instance.new("UICorner", barFill).CornerRadius = UDim.new(1, 0)
-
-            ts:Create(barFill, TweenInfo.new(1.5, Enum.EasingStyle.Linear), {Size = UDim2.new(1, 0, 1, 0)}):Play()
-            task.wait(1.5)
-
-            local scriptAntiCache = SCRIPT_URL .. "?t=" .. tostring(os.time())
-            local successDownload, newScript = pcall(function() return game:HttpGet(scriptAntiCache) end)
-            if successDownload and newScript then
-                if writefile then writefile("Hub.lua", newScript) end
-                updateGui:Destroy()
-                getgenv().UpdatingHub = false
-                loadstring(newScript)()
-                return true
-            else
-                getgenv().UpdatingHub = false
-                updateGui:Destroy()
-            end
-        end
-    end
-    return false
-end
-
-if checkForUpdates() then return end
-
 local configName = "EmpireConfig.json"
-local cfg = { delivery = false, deliveryMode = "Easy" }
+local cfg = { delivery = false, deliveryMode = "Easy", autoHop = false }
 
 if isfile and isfile(configName) then
     pcall(function()
@@ -91,27 +19,18 @@ if isfile and isfile(configName) then
         if data and type(data) == "table" then
             if data.delivery ~= nil then cfg.delivery = data.delivery end
             if data.deliveryMode ~= nil then cfg.deliveryMode = data.deliveryMode end
+            if data.autoHop ~= nil then cfg.autoHop = data.autoHop end
         end
     end)
 end
 
 local function saveCfg()
-    if writefile then
-        pcall(function()
-            writefile(configName, http:JSONEncode(cfg))
-        end)
-    end
+    if writefile then pcall(function() writefile(configName, http:JSONEncode(cfg)) end) end
 end
 
-for _, v in pairs(coreGui:GetChildren()) do
-    if v.Name == "PremiumHub" then v:Destroy() end
-end
-local playerGui = lp:FindFirstChild("PlayerGui")
-if playerGui then
-    for _, v in pairs(playerGui:GetChildren()) do
-        if v.Name == "PremiumHub" then v:Destroy() end
-    end
-end
+for _, v in pairs(coreGui:GetChildren()) do if v.Name == "PremiumHub" then v:Destroy() end end
+local playerGui = lp:WaitForChild("PlayerGui")
+for _, v in pairs(playerGui:GetChildren()) do if v.Name == "PremiumHub" then v:Destroy() end end
 
 local sg = Instance.new("ScreenGui")
 sg.Name = "PremiumHub"
@@ -131,19 +50,14 @@ openBall.TextSize = 20
 openBall.BorderSizePixel = 0
 openBall.Visible = true
 openBall.Parent = sg
-
-local ballCorner = Instance.new("UICorner")
-ballCorner.CornerRadius = UDim.new(1, 0)
-ballCorner.Parent = openBall
-
-local ballStroke = Instance.new("UIStroke")
+Instance.new("UICorner", openBall).CornerRadius = UDim.new(1, 0)
+local ballStroke = Instance.new("UIStroke", openBall)
 ballStroke.Color = Color3.fromRGB(50, 150, 255)
 ballStroke.Thickness = 2
-ballStroke.Parent = openBall
 
 local mainFrame = Instance.new("Frame")
-mainFrame.Size = UDim2.new(0, 220, 0, 340)
-mainFrame.Position = UDim2.new(0.5, -110, 0.5, -170)
+mainFrame.Size = UDim2.new(0, 220, 0, 380)
+mainFrame.Position = UDim2.new(0.5, -110, 0.5, -190)
 mainFrame.BackgroundColor3 = Color3.fromRGB(25, 25, 30)
 mainFrame.BorderSizePixel = 0
 mainFrame.Active = true
@@ -151,21 +65,17 @@ mainFrame.Visible = false
 mainFrame.Parent = sg
 Instance.new("UICorner", mainFrame).CornerRadius = UDim.new(0, 8)
 
-local topBar = Instance.new("Frame")
+local topBar = Instance.new("Frame", mainFrame)
 topBar.Size = UDim2.new(1, 0, 0, 35)
 topBar.BackgroundColor3 = Color3.fromRGB(20, 20, 25)
-topBar.BorderSizePixel = 0
-topBar.Parent = mainFrame
 Instance.new("UICorner", topBar).CornerRadius = UDim.new(0, 8)
-
-local titleFix = Instance.new("Frame")
+local titleFix = Instance.new("Frame", topBar)
 titleFix.Size = UDim2.new(1, 0, 0, 8)
 titleFix.Position = UDim2.new(0, 0, 1, -8)
 titleFix.BackgroundColor3 = Color3.fromRGB(20, 20, 25)
 titleFix.BorderSizePixel = 0
-titleFix.Parent = topBar
 
-local titleText = Instance.new("TextLabel")
+local titleText = Instance.new("TextLabel", topBar)
 titleText.Size = UDim2.new(1, -50, 1, 0)
 titleText.Position = UDim2.new(0, 10, 0, 0)
 titleText.BackgroundTransparency = 1
@@ -174,9 +84,8 @@ titleText.TextColor3 = Color3.fromRGB(255, 255, 255)
 titleText.Font = Enum.Font.GothamBold
 titleText.TextSize = 13
 titleText.TextXAlignment = Enum.TextXAlignment.Left
-titleText.Parent = topBar
 
-local minBtn = Instance.new("TextButton")
+local minBtn = Instance.new("TextButton", topBar)
 minBtn.Size = UDim2.new(0, 30, 0, 25)
 minBtn.Position = UDim2.new(1, -38, 0, 5)
 minBtn.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
@@ -184,27 +93,18 @@ minBtn.Text = "X"
 minBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
 minBtn.Font = Enum.Font.GothamBold
 minBtn.TextSize = 14
-minBtn.Parent = topBar
 Instance.new("UICorner", minBtn).CornerRadius = UDim.new(0, 4)
 
-minBtn.MouseButton1Click:Connect(function()
-    mainFrame.Visible = false
-    openBall.Visible = true
-end)
+minBtn.MouseButton1Click:Connect(function() mainFrame.Visible = false; openBall.Visible = true end)
+openBall.MouseButton1Click:Connect(function() mainFrame.Visible = true; openBall.Visible = false end)
 
-openBall.MouseButton1Click:Connect(function()
-    mainFrame.Visible = true
-    openBall.Visible = false
-end)
-
-local tabContainer = Instance.new("Frame")
+local tabContainer = Instance.new("Frame", mainFrame)
 tabContainer.Size = UDim2.new(1, 0, 0, 35)
 tabContainer.Position = UDim2.new(0, 0, 0, 35)
 tabContainer.BackgroundColor3 = Color3.fromRGB(30, 30, 35)
 tabContainer.BorderSizePixel = 0
-tabContainer.Parent = mainFrame
 
-local tabFarm = Instance.new("TextButton")
+local tabFarm = Instance.new("TextButton", tabContainer)
 tabFarm.Size = UDim2.new(0.5, 0, 1, 0)
 tabFarm.BackgroundColor3 = Color3.fromRGB(50, 100, 200)
 tabFarm.Text = "Trabalhos"
@@ -212,9 +112,8 @@ tabFarm.TextColor3 = Color3.fromRGB(255, 255, 255)
 tabFarm.Font = Enum.Font.GothamSemibold
 tabFarm.TextSize = 13
 tabFarm.BorderSizePixel = 0
-tabFarm.Parent = tabContainer
 
-local tabConfig = Instance.new("TextButton")
+local tabConfig = Instance.new("TextButton", tabContainer)
 tabConfig.Size = UDim2.new(0.5, 0, 1, 0)
 tabConfig.Position = UDim2.new(0.5, 0, 0, 0)
 tabConfig.BackgroundColor3 = Color3.fromRGB(30, 30, 35)
@@ -223,111 +122,85 @@ tabConfig.TextColor3 = Color3.fromRGB(200, 200, 200)
 tabConfig.Font = Enum.Font.GothamSemibold
 tabConfig.TextSize = 13
 tabConfig.BorderSizePixel = 0
-tabConfig.Parent = tabContainer
 
-local contentArea = Instance.new("Frame")
+local contentArea = Instance.new("Frame", mainFrame)
 contentArea.Size = UDim2.new(1, 0, 1, -70)
 contentArea.Position = UDim2.new(0, 0, 0, 70)
 contentArea.BackgroundTransparency = 1
-contentArea.Parent = mainFrame
 
-local farmPage = Instance.new("ScrollingFrame")
+local farmPage = Instance.new("ScrollingFrame", contentArea)
 farmPage.Size = UDim2.new(1, 0, 1, 0)
 farmPage.BackgroundTransparency = 1
 farmPage.ScrollBarThickness = 4
-farmPage.Parent = contentArea
 
-local configPage = Instance.new("Frame")
+local configPage = Instance.new("Frame", contentArea)
 configPage.Size = UDim2.new(1, 0, 1, 0)
 configPage.BackgroundTransparency = 1
 configPage.Visible = false
-configPage.Parent = contentArea
 
 tabFarm.MouseButton1Click:Connect(function()
-    tabFarm.BackgroundColor3 = Color3.fromRGB(50, 100, 200)
-    tabFarm.TextColor3 = Color3.fromRGB(255, 255, 255)
-    tabConfig.BackgroundColor3 = Color3.fromRGB(30, 30, 35)
-    tabConfig.TextColor3 = Color3.fromRGB(200, 200, 200)
-    farmPage.Visible = true
-    configPage.Visible = false
+    tabFarm.BackgroundColor3 = Color3.fromRGB(50, 100, 200); tabFarm.TextColor3 = Color3.fromRGB(255, 255, 255)
+    tabConfig.BackgroundColor3 = Color3.fromRGB(30, 30, 35); tabConfig.TextColor3 = Color3.fromRGB(200, 200, 200)
+    farmPage.Visible = true; configPage.Visible = false
 end)
 
 tabConfig.MouseButton1Click:Connect(function()
-    tabConfig.BackgroundColor3 = Color3.fromRGB(50, 100, 200)
-    tabConfig.TextColor3 = Color3.fromRGB(255, 255, 255)
-    tabFarm.BackgroundColor3 = Color3.fromRGB(30, 30, 35)
-    tabFarm.TextColor3 = Color3.fromRGB(200, 200, 200)
-    configPage.Visible = true
-    farmPage.Visible = false
+    tabConfig.BackgroundColor3 = Color3.fromRGB(50, 100, 200); tabConfig.TextColor3 = Color3.fromRGB(255, 255, 255)
+    tabFarm.BackgroundColor3 = Color3.fromRGB(30, 30, 35); tabFarm.TextColor3 = Color3.fromRGB(200, 200, 200)
+    configPage.Visible = true; farmPage.Visible = false
 end)
 
-local farmLayout = Instance.new("UIListLayout")
+local farmLayout = Instance.new("UIListLayout", farmPage)
 farmLayout.Padding = UDim.new(0, 10)
 farmLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
-farmLayout.Parent = farmPage
-local farmPadding = Instance.new("UIPadding")
+local farmPadding = Instance.new("UIPadding", farmPage)
 farmPadding.PaddingTop = UDim.new(0, 15)
-farmPadding.Parent = farmPage
 
 local function createToggle(name, parent, sizeY)
-    local btn = Instance.new("TextButton")
+    local btn = Instance.new("TextButton", parent)
     btn.Size = UDim2.new(0.9, 0, 0, sizeY or 45)
     btn.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
     btn.Text = name .. ": DESLIGADO"
     btn.TextColor3 = Color3.fromRGB(255, 255, 255)
     btn.Font = Enum.Font.GothamBold
     btn.TextSize = 14
-    btn.Parent = parent
     Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 6)
     return btn
 end
 
+-- MODO DE DIFICULDADE
 getgenv().DeliveryMode = cfg.deliveryMode
 local modeBtn = createToggle("Dificuldade", farmPage, 35)
 modeBtn.Text = "Modo: " .. cfg.deliveryMode
 modeBtn.BackgroundColor3 = cfg.deliveryMode == "Easy" and Color3.fromRGB(50, 200, 50) or Color3.fromRGB(200, 100, 50)
-
 modeBtn.MouseButton1Click:Connect(function()
-    if getgenv().DeliveryMode == "Easy" then
-        getgenv().DeliveryMode = "Hard"
-        modeBtn.BackgroundColor3 = Color3.fromRGB(200, 100, 50)
-    else
-        getgenv().DeliveryMode = "Easy"
-        modeBtn.BackgroundColor3 = Color3.fromRGB(50, 200, 50)
-    end
+    getgenv().DeliveryMode = getgenv().DeliveryMode == "Easy" and "Hard" or "Easy"
     cfg.deliveryMode = getgenv().DeliveryMode
     modeBtn.Text = "Modo: " .. cfg.deliveryMode
+    modeBtn.BackgroundColor3 = cfg.deliveryMode == "Easy" and Color3.fromRGB(50, 200, 50) or Color3.fromRGB(200, 100, 50)
     saveCfg()
 end)
 
+-- TOGGLE ENTREGADOR
 local deliveryToggleBtn = createToggle("Entregador", farmPage, 45)
 getgenv().AutoFarmDelivery = cfg.delivery
 getgenv().DeliveryInitialPosition = nil
 
-local function getRoot()
-    return lp.Character and lp.Character:FindFirstChild("HumanoidRootPart")
-end
+local function getRoot() return lp.Character and lp.Character:FindFirstChild("HumanoidRootPart") end
 
 local function updateDeliveryUI()
     if getgenv().AutoFarmDelivery then
         deliveryToggleBtn.BackgroundColor3 = Color3.fromRGB(50, 200, 50)
         deliveryToggleBtn.Text = "Entregador: LIGADO"
-
         local root = getRoot()
         if root then getgenv().DeliveryInitialPosition = root.CFrame end
-
-        pcall(function()
-            local url = "https://raw.githubusercontent.com/Evollogic/drivingempire/main/Works/Delivery.lua?t=" .. tostring(os.time())
-            loadstring(game:HttpGet(url))()
-        end)
+        pcall(function() loadstring(game:HttpGet("https://raw.githubusercontent.com/Evollogic/drivingempire/main/Works/Delivery.lua?t="..os.time()))() end)
     else
         deliveryToggleBtn.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
         deliveryToggleBtn.Text = "Entregador: DESLIGADO"
-
         local root = getRoot()
         if root and getgenv().DeliveryInitialPosition then
-            root.Velocity = Vector3.new(0,0,0)
-            root.AssemblyLinearVelocity = Vector3.new(0,0,0)
+            root.Velocity, root.AssemblyLinearVelocity = Vector3.new(0,0,0), Vector3.new(0,0,0)
             root.CFrame = getgenv().DeliveryInitialPosition
         end
     end
@@ -339,62 +212,87 @@ deliveryToggleBtn.MouseButton1Click:Connect(function()
     saveCfg()
     updateDeliveryUI()
 end)
+if getgenv().AutoFarmDelivery then task.spawn(function() if not lp.Character then lp.CharacterAdded:Wait() end task.wait(1) updateDeliveryUI() end) end
 
-if getgenv().AutoFarmDelivery then
-    task.spawn(function()
-        if not lp.Character then lp.CharacterAdded:Wait() end
-        task.wait(1)
-        updateDeliveryUI()
-    end)
+-- TOGGLE AUTO-HOP (AGORA FUNCIONAL)
+local autoHopToggleBtn = createToggle("Auto-Hop (Sair AFK)", farmPage, 45)
+getgenv().AutoHopState = cfg.autoHop
+
+local function updateHopUI()
+    if getgenv().AutoHopState then
+        autoHopToggleBtn.BackgroundColor3 = Color3.fromRGB(50, 200, 50)
+        autoHopToggleBtn.Text = "Auto-Hop: LIGADO"
+    else
+        autoHopToggleBtn.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
+        autoHopToggleBtn.Text = "Auto-Hop: DESLIGADO"
+    end
 end
 
-local function makeDraggable(dragPoint, dragTarget)
-    local dragging = false
-    local dragStart = nil
-    local startPos = nil
+autoHopToggleBtn.MouseButton1Click:Connect(function()
+    getgenv().AutoHopState = not getgenv().AutoHopState
+    cfg.autoHop = getgenv().AutoHopState
+    saveCfg()
+    updateHopUI()
+end)
+updateHopUI()
 
+-- SISTEMA DE ARRASTAR
+local function makeDraggable(dragPoint, dragTarget)
+    local dragging, dragStart, startPos = false, nil, nil
     dragPoint.InputBegan:Connect(function(input)
         if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-            dragging = true
-            dragStart = input.Position
-            startPos = dragTarget.AbsolutePosition
+            dragging = true; dragStart = input.Position; startPos = dragTarget.AbsolutePosition
         end
     end)
-
     uis.InputChanged:Connect(function(input)
         if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
             local delta = input.Position - dragStart
-            local screenSize = sg.AbsoluteSize
-            local objSize = dragTarget.AbsoluteSize
-
-            local newX = math.clamp(startPos.X + delta.X, 0, screenSize.X - objSize.X)
-            local newY = math.clamp(startPos.Y + delta.Y, 0, screenSize.Y - objSize.Y)
-
-            dragTarget.Position = UDim2.new(0, newX, 0, newY)
+            dragTarget.Position = UDim2.new(0, math.clamp(startPos.X + delta.X, 0, sg.AbsoluteSize.X - dragTarget.AbsoluteSize.X), 0, math.clamp(startPos.Y + delta.Y, 0, sg.AbsoluteSize.Y - dragTarget.AbsoluteSize.Y))
         end
     end)
-
     uis.InputEnded:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-            dragging = false
-        end
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then dragging = false end
     end)
 end
+makeDraggable(mainFrame, mainFrame); makeDraggable(topBar, mainFrame); makeDraggable(openBall, openBall)
 
-makeDraggable(mainFrame, mainFrame)
-makeDraggable(topBar, mainFrame)
-makeDraggable(openBall, openBall)
-
+-- BACKGROUND TASKS
 task.spawn(function()
     if not getgenv().AutoClaimRunning then
         getgenv().AutoClaimRunning = true
-        pcall(function()
-            local url = "https://raw.githubusercontent.com/Evollogic/drivingempire/main/Auto/autoclaim.lua?t=" .. tostring(os.time())
-            loadstring(game:HttpGet(url))()
-        end)
+        pcall(function() loadstring(game:HttpGet("https://raw.githubusercontent.com/Evollogic/drivingempire/main/Auto/autoclaim.lua?t="..os.time()))() end)
     end
 end)
 
--- LOOP DE AUTOHOP DESATIVADO TEMPORARIAMENTE PARA NÃO BUGAR O JOGO
--- Assim que você me mandar o caminho exato do botão do servidor AFK, a gente liga isso de novo com a trava certa!
-
+-- NOVO SISTEMA DE AUTO-HOP (PRECISO E SEM LOOP INFINITO)
+task.spawn(function()
+    while task.wait(5) do
+        if getgenv().AutoHopState then
+            pcall(function()
+                local gui = lp.PlayerGui:FindFirstChild("HUD")
+                if gui then
+                    -- Busca os botões exatos em qualquer lugar dentro do HUD usando busca recursiva
+                    local afkBtn = gui:FindFirstChild("LeaveAFKServer", true)
+                    local matchBtn = gui:FindFirstChild("LeaveMatchmakingServer", true)
+                    
+                    -- Verifica se pelo menos um deles foi encontrado e está visível na tela
+                    if (afkBtn and afkBtn.Visible) or (matchBtn and matchBtn.Visible) then
+                        print("[Auto-Hop] Tela de AFK verificada com sucesso! Reconectando...")
+                        
+                        -- Tenta acionar o clique do botão nativamente (se o executor suportar)
+                        if getconnections then
+                            if afkBtn then for _, c in pairs(getconnections(afkBtn.MouseButton1Click)) do c:Fire() end end
+                            if matchBtn then for _, c in pairs(getconnections(matchBtn.MouseButton1Click)) do c:Fire() end end
+                        end
+                        
+                        task.wait(1)
+                        
+                        -- Força o teleporte pelo serviço principal como garantia
+                        teleportService:Teleport(game.PlaceId, lp)
+                        task.wait(15) 
+                    end
+                end
+            end)
+        end
+    end
+end)
