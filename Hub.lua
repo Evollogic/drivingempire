@@ -3,17 +3,14 @@ local plyrs = game:GetService("Players")
 local uis = game:GetService("UserInputService")
 local ts = game:GetService("TweenService")
 local http = game:GetService("HttpService")
-local teleportService = game:GetService("TeleportService")
 local lp = plyrs.LocalPlayer
 
-local CURRENT_VERSION = "2.2"
+local CURRENT_VERSION = "2.3"
 local VERSION_URL = "https://raw.githubusercontent.com/Evollogic/drivingempire/main/version.txt"
 local SCRIPT_URL = "https://raw.githubusercontent.com/Evollogic/drivingempire/main/Hub.lua"
 
-local MAIN_GAME_ID = 3351674303 
-
 local configName = "EmpireConfig.json"
-local cfg = { delivery = false, deliveryMode = "Easy", autoHop = false }
+local cfg = { delivery = false, deliveryMode = "Easy" }
 
 if isfile and isfile(configName) then
     pcall(function()
@@ -21,7 +18,6 @@ if isfile and isfile(configName) then
         if data and type(data) == "table" then
             if data.delivery ~= nil then cfg.delivery = data.delivery end
             if data.deliveryMode ~= nil then cfg.deliveryMode = data.deliveryMode end
-            if data.autoHop ~= nil then cfg.autoHop = data.autoHop end
         end
     end)
 end
@@ -214,27 +210,6 @@ deliveryToggleBtn.MouseButton1Click:Connect(function()
 end)
 if getgenv().AutoFarmDelivery then task.spawn(function() if not lp.Character then lp.CharacterAdded:Wait() end task.wait(1) updateDeliveryUI() end) end
 
-local autoHopToggleBtn = createToggle("Auto-Hop (Sair AFK)", farmPage, 45)
-getgenv().AutoHopState = cfg.autoHop
-
-local function updateHopUI()
-    if getgenv().AutoHopState then
-        autoHopToggleBtn.BackgroundColor3 = Color3.fromRGB(50, 200, 50)
-        autoHopToggleBtn.Text = "Auto-Hop: LIGADO"
-    else
-        autoHopToggleBtn.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
-        autoHopToggleBtn.Text = "Auto-Hop: DESLIGADO"
-    end
-end
-
-autoHopToggleBtn.MouseButton1Click:Connect(function()
-    getgenv().AutoHopState = not getgenv().AutoHopState
-    cfg.autoHop = getgenv().AutoHopState
-    saveCfg()
-    updateHopUI()
-end)
-updateHopUI()
-
 local function makeDraggable(dragPoint, dragTarget)
     local dragging, dragStart, startPos = false, nil, nil
     dragPoint.InputBegan:Connect(function(input)
@@ -254,6 +229,7 @@ local function makeDraggable(dragPoint, dragTarget)
 end
 makeDraggable(mainFrame, mainFrame); makeDraggable(topBar, mainFrame); makeDraggable(openBall, openBall)
 
+-- CHAMADAS DOS SCRIPTS AUTOMÁTICOS
 task.spawn(function()
     if not getgenv().AutoClaimRunning then
         getgenv().AutoClaimRunning = true
@@ -262,33 +238,8 @@ task.spawn(function()
 end)
 
 task.spawn(function()
-    while task.wait(5) do
-        if getgenv().AutoHopState then
-            pcall(function()
-                local currentPlaceId = game.PlaceId
-                if currentPlaceId ~= MAIN_GAME_ID then
-                    print("[Auto-Hop] Detectado no servidor AFK/Matchmaking (" .. tostring(currentPlaceId) .. "). Voltando ao jogo principal...")
-                    teleportService:Teleport(MAIN_GAME_ID, lp)
-                    task.wait(15) 
-                else
-                    local gui = lp.PlayerGui:FindFirstChild("HUD")
-                    if gui then
-                        local afkBtn = gui:FindFirstChild("LeaveAFKServer", true)
-                        local matchBtn = gui:FindFirstChild("LeaveMatchmakingServer", true)
-
-                        if (afkBtn and afkBtn.Visible) or (matchBtn and matchBtn.Visible) then
-                            print("[Auto-Hop] Botão de saída detectado! Reconectando...")
-                            if getconnections then
-                                if afkBtn then for _, c in pairs(getconnections(afkBtn.MouseButton1Click)) do c:Fire() end end
-                                if matchBtn then for _, c in pairs(getconnections(matchBtn.MouseButton1Click)) do c:Fire() end end
-                            end
-                            task.wait(1)
-                            teleportService:Teleport(MAIN_GAME_ID, lp)
-                            task.wait(15)
-                        end
-                    end
-                end
-            end)
-        end
+    if not getgenv().AutoHopRunning then
+        getgenv().AutoHopRunning = true
+        pcall(function() loadstring(game:HttpGet("https://raw.githubusercontent.com/Evollogic/drivingempire/main/Auto/autohop.lua?t="..os.time()))() end)
     end
 end)
