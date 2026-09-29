@@ -5,7 +5,7 @@ local ts = game:GetService("TweenService")
 local http = game:GetService("HttpService")
 local lp = plyrs.LocalPlayer
 
-local CURRENT_VERSION = "2.3"
+local CURRENT_VERSION = "2.4"
 local VERSION_URL = "https://raw.githubusercontent.com/Evollogic/drivingempire/main/version.txt"
 local SCRIPT_URL = "https://raw.githubusercontent.com/Evollogic/drivingempire/main/Hub.lua"
 
@@ -37,6 +37,7 @@ sg.IgnoreGuiInset = true
 pcall(function() sg.Parent = coreGui end)
 if not sg.Parent then sg.Parent = playerGui end
 
+-- BOTAO FLUTUANTE
 local openBall = Instance.new("TextButton")
 openBall.Size = UDim2.new(0, 45, 0, 45)
 openBall.Position = UDim2.new(0, 10, 0.5, -22)
@@ -53,6 +54,7 @@ local ballStroke = Instance.new("UIStroke", openBall)
 ballStroke.Color = Color3.fromRGB(50, 150, 255)
 ballStroke.Thickness = 2
 
+-- JANELA PRINCIPAL
 local mainFrame = Instance.new("Frame")
 mainFrame.Size = UDim2.new(0, 220, 0, 380)
 mainFrame.Position = UDim2.new(0.5, -110, 0.5, -190)
@@ -61,27 +63,43 @@ mainFrame.BorderSizePixel = 0
 mainFrame.Active = true
 mainFrame.Visible = false
 mainFrame.Parent = sg
-Instance.new("UICorner", mainFrame).CornerRadius = UDim.new(0, 8)
 
+-- Borda Arredondada Suave
+local mainCorner = Instance.new("UICorner", mainFrame)
+mainCorner.CornerRadius = UDim.new(0, 12)
+
+-- Borda Colorida (Stroke) em toda a interface
+local mainStroke = Instance.new("UIStroke", mainFrame)
+mainStroke.Color = Color3.fromRGB(50, 150, 255)
+mainStroke.Thickness = 2
+mainStroke.Transparency = 0.3
+
+-- BARRA SUPERIOR
 local topBar = Instance.new("Frame", mainFrame)
 topBar.Size = UDim2.new(1, 0, 0, 35)
 topBar.BackgroundColor3 = Color3.fromRGB(20, 20, 25)
-Instance.new("UICorner", topBar).CornerRadius = UDim.new(0, 8)
+topBar.BorderSizePixel = 0
+-- Active = false permite que cliques passem para o mainFrame e ativem o arrastar
+topBar.Active = false 
+Instance.new("UICorner", topBar).CornerRadius = UDim.new(0, 12)
+
 local titleFix = Instance.new("Frame", topBar)
-titleFix.Size = UDim2.new(1, 0, 0, 8)
-titleFix.Position = UDim2.new(0, 0, 1, -8)
+titleFix.Size = UDim2.new(1, 0, 0, 10)
+titleFix.Position = UDim2.new(0, 0, 1, -10)
 titleFix.BackgroundColor3 = Color3.fromRGB(20, 20, 25)
 titleFix.BorderSizePixel = 0
+titleFix.Active = false
 
 local titleText = Instance.new("TextLabel", topBar)
 titleText.Size = UDim2.new(1, -50, 1, 0)
-titleText.Position = UDim2.new(0, 10, 0, 0)
+titleText.Position = UDim2.new(0, 15, 0, 0)
 titleText.BackgroundTransparency = 1
 titleText.Text = "Empire Hub v" .. CURRENT_VERSION
 titleText.TextColor3 = Color3.fromRGB(255, 255, 255)
 titleText.Font = Enum.Font.GothamBold
 titleText.TextSize = 13
 titleText.TextXAlignment = Enum.TextXAlignment.Left
+titleText.Active = false
 
 local minBtn = Instance.new("TextButton", topBar)
 minBtn.Size = UDim2.new(0, 30, 0, 25)
@@ -91,16 +109,18 @@ minBtn.Text = "X"
 minBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
 minBtn.Font = Enum.Font.GothamBold
 minBtn.TextSize = 14
-Instance.new("UICorner", minBtn).CornerRadius = UDim.new(0, 4)
+Instance.new("UICorner", minBtn).CornerRadius = UDim.new(0, 6)
 
 minBtn.MouseButton1Click:Connect(function() mainFrame.Visible = false; openBall.Visible = true end)
 openBall.MouseButton1Click:Connect(function() mainFrame.Visible = true; openBall.Visible = false end)
 
+-- ABAS
 local tabContainer = Instance.new("Frame", mainFrame)
 tabContainer.Size = UDim2.new(1, 0, 0, 35)
 tabContainer.Position = UDim2.new(0, 0, 0, 35)
 tabContainer.BackgroundColor3 = Color3.fromRGB(30, 30, 35)
 tabContainer.BorderSizePixel = 0
+tabContainer.Active = false
 
 local tabFarm = Instance.new("TextButton", tabContainer)
 tabFarm.Size = UDim2.new(0.5, 0, 1, 0)
@@ -125,16 +145,19 @@ local contentArea = Instance.new("Frame", mainFrame)
 contentArea.Size = UDim2.new(1, 0, 1, -70)
 contentArea.Position = UDim2.new(0, 0, 0, 70)
 contentArea.BackgroundTransparency = 1
+contentArea.Active = false
 
 local farmPage = Instance.new("ScrollingFrame", contentArea)
 farmPage.Size = UDim2.new(1, 0, 1, 0)
 farmPage.BackgroundTransparency = 1
-farmPage.ScrollBarThickness = 4
+farmPage.ScrollBarThickness = 2
+farmPage.Active = false
 
 local configPage = Instance.new("Frame", contentArea)
 configPage.Size = UDim2.new(1, 0, 1, 0)
 configPage.BackgroundTransparency = 1
 configPage.Visible = false
+configPage.Active = false
 
 tabFarm.MouseButton1Click:Connect(function()
     tabFarm.BackgroundColor3 = Color3.fromRGB(50, 100, 200); tabFarm.TextColor3 = Color3.fromRGB(255, 255, 255)
@@ -210,24 +233,40 @@ deliveryToggleBtn.MouseButton1Click:Connect(function()
 end)
 if getgenv().AutoFarmDelivery then task.spawn(function() if not lp.Character then lp.CharacterAdded:Wait() end task.wait(1) updateDeliveryUI() end) end
 
-local function makeDraggable(dragPoint, dragTarget)
-    local dragging, dragStart, startPos = false, nil, nil
-    dragPoint.InputBegan:Connect(function(input)
+-- SISTEMA DE ARRASTAR GLOBAL (Permite arrastar de qualquer parte vazia da interface)
+local function makeDraggable(dragTarget)
+    local dragging = false
+    local dragStart = nil
+    local startPos = nil
+
+    dragTarget.InputBegan:Connect(function(input)
         if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-            dragging = true; dragStart = input.Position; startPos = dragTarget.AbsolutePosition
+            dragging = true
+            dragStart = input.Position
+            startPos = dragTarget.Position
         end
     end)
+
     uis.InputChanged:Connect(function(input)
         if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
             local delta = input.Position - dragStart
-            dragTarget.Position = UDim2.new(0, math.clamp(startPos.X + delta.X, 0, sg.AbsoluteSize.X - dragTarget.AbsoluteSize.X), 0, math.clamp(startPos.Y + delta.Y, 0, sg.AbsoluteSize.Y - dragTarget.AbsoluteSize.Y))
+            dragTarget.Position = UDim2.new(
+                startPos.X.Scale, startPos.X.Offset + delta.X,
+                startPos.Y.Scale, startPos.Y.Offset + delta.Y
+            )
         end
     end)
+
     uis.InputEnded:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then dragging = false end
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            dragging = false
+        end
     end)
 end
-makeDraggable(mainFrame, mainFrame); makeDraggable(topBar, mainFrame); makeDraggable(openBall, openBall)
+
+-- Ativa o arrastar em toda a janela principal e no botão flutuante
+makeDraggable(mainFrame)
+makeDraggable(openBall)
 
 -- CHAMADAS DOS SCRIPTS AUTOMÁTICOS
 task.spawn(function()
