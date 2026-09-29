@@ -5,7 +5,7 @@ local ts = game:GetService("TweenService")
 local http = game:GetService("HttpService")
 local lp = plyrs.LocalPlayer
 
-local CURRENT_VERSION = "2.6"
+local CURRENT_VERSION = "2.7"
 local VERSION_URL = "https://raw.githubusercontent.com/Evollogic/drivingempire/main/version.txt"
 local SCRIPT_URL = "https://raw.githubusercontent.com/Evollogic/drivingempire/main/Hub.lua"
 
@@ -75,12 +75,11 @@ mainStroke.Thickness = 2.5
 mainStroke.Transparency = 0
 local strokeGradient = Instance.new("UIGradient", mainStroke)
 strokeGradient.Color = ColorSequence.new({
-    ColorSequenceKeypoint.new(0, Color3.fromRGB(0, 255, 255)),
-    ColorSequenceKeypoint.new(0.5, Color3.fromRGB(138, 43, 226)),
-    ColorSequenceKeypoint.new(1, Color3.fromRGB(0, 255, 255))
+    ColorSequenceKeypoint.new(0, 255, 255),
+    ColorSequenceKeypoint.new(138, 43, 226),
+    ColorSequenceKeypoint.new(0, 255, 255)
 })
 
--- Animação do Glow Futurista
 task.spawn(function()
     local rotacao = 0
     while task.wait(0.02) do
@@ -90,21 +89,12 @@ task.spawn(function()
     end
 end)
 
--- ÁREA DE ARRASTAR (Cobre toda a janela para evitar falhas nas bordas)
-local dragArea = Instance.new("TextButton", mainFrame)
-dragArea.Size = UDim2.new(1, 20, 1, 20)
-dragArea.Position = UDim2.new(0, -10, 0, -10)
-dragArea.BackgroundTransparency = 1
-dragArea.Text = ""
-dragArea.ZIndex = 0 
-
 -- BARRA SUPERIOR
 local topBar = Instance.new("Frame", mainFrame)
 topBar.Size = UDim2.new(1, 0, 0, 35)
 topBar.BackgroundColor3 = Color3.fromRGB(15, 15, 20)
 topBar.BackgroundTransparency = 0.5
 topBar.BorderSizePixel = 0
-topBar.Active = false 
 Instance.new("UICorner", topBar).CornerRadius = UDim.new(0, 12)
 
 local titleFix = Instance.new("Frame", topBar)
@@ -113,7 +103,6 @@ titleFix.Position = UDim2.new(0, 0, 1, -10)
 titleFix.BackgroundColor3 = Color3.fromRGB(15, 15, 20)
 titleFix.BackgroundTransparency = 0.5
 titleFix.BorderSizePixel = 0
-titleFix.Active = false
 
 local titleText = Instance.new("TextLabel", topBar)
 titleText.Size = UDim2.new(1, -50, 1, 0)
@@ -124,7 +113,6 @@ titleText.TextColor3 = Color3.fromRGB(0, 255, 255)
 titleText.Font = Enum.Font.GothamBold
 titleText.TextSize = 13
 titleText.TextXAlignment = Enum.TextXAlignment.Left
-titleText.Active = false
 
 local minBtn = Instance.new("TextButton", topBar)
 minBtn.Size = UDim2.new(0, 30, 0, 25)
@@ -146,7 +134,6 @@ tabContainer.Position = UDim2.new(0, 0, 0, 35)
 tabContainer.BackgroundColor3 = Color3.fromRGB(20, 20, 25)
 tabContainer.BackgroundTransparency = 0.5
 tabContainer.BorderSizePixel = 0
-tabContainer.Active = false
 
 local tabFarm = Instance.new("TextButton", tabContainer)
 tabFarm.Size = UDim2.new(0.5, 0, 1, 0)
@@ -173,19 +160,16 @@ local contentArea = Instance.new("Frame", mainFrame)
 contentArea.Size = UDim2.new(1, 0, 1, -70)
 contentArea.Position = UDim2.new(0, 0, 0, 70)
 contentArea.BackgroundTransparency = 1
-contentArea.Active = false
 
 local farmPage = Instance.new("ScrollingFrame", contentArea)
 farmPage.Size = UDim2.new(1, 0, 1, 0)
 farmPage.BackgroundTransparency = 1
 farmPage.ScrollBarThickness = 2
-farmPage.Active = false
 
 local configPage = Instance.new("Frame", contentArea)
 configPage.Size = UDim2.new(1, 0, 1, 0)
 configPage.BackgroundTransparency = 1
 configPage.Visible = false
-configPage.Active = false
 
 tabFarm.MouseButton1Click:Connect(function()
     tabFarm.BackgroundColor3 = Color3.fromRGB(0, 150, 255); tabFarm.BackgroundTransparency = 0.2; tabFarm.TextColor3 = Color3.fromRGB(255, 255, 255)
@@ -267,23 +251,21 @@ deliveryToggleBtn.MouseButton1Click:Connect(function()
 end)
 if getgenv().AutoFarmDelivery then task.spawn(function() if not lp.Character then lp.CharacterAdded:Wait() end task.wait(1) updateDeliveryUI() end) end
 
--- SISTEMA DE ARRASTAR ROBUSTO (Usa a área invisível estendida para as bordas)
-local function makeDraggable(guiToMove, dragTrigger)
-    local dragging, dragInput, dragStart, startPos
+-- SISTEMA DE ARRASTAR DEFINITIVO
+local dragging = false
+local dragInput, dragStart, startPos
 
-    local function update(input)
-        local delta = input.Position - dragStart
-        guiToMove.Position = UDim2.new(
-            startPos.X.Scale, startPos.X.Offset + delta.X,
-            startPos.Y.Scale, startPos.Y.Offset + delta.Y
-        )
-    end
+local function updateInput(input)
+    local delta = input.Position - dragStart
+    mainFrame.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+end
 
-    dragTrigger.InputBegan:Connect(function(input)
+local function setupDraggable(guiObject, moveObject)
+    guiObject.InputBegan:Connect(function(input)
         if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
             dragging = true
             dragStart = input.Position
-            startPos = guiToMove.Position
+            startPos = moveObject.Position
 
             input.Changed:Connect(function()
                 if input.UserInputState == Enum.UserInputState.End then
@@ -293,22 +275,48 @@ local function makeDraggable(guiToMove, dragTrigger)
         end
     end)
 
-    dragTrigger.InputChanged:Connect(function(input)
+    guiObject.InputChanged:Connect(function(input)
         if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
             dragInput = input
         end
     end)
-
-    uis.InputChanged:Connect(function(input)
-        if input == dragInput and dragging then
-            update(input)
-        end
-    end)
 end
 
--- Atribui o arrasto usando o botão invisível e o botão flutuante
-makeDraggable(mainFrame, dragArea)
-makeDraggable(openBall, openBall)
+setupDraggable(mainFrame, mainFrame)
+setupDraggable(topBar, mainFrame)
+
+-- Arrasto independente para o botão flutuante
+local ballDragging = false
+local ballDragInput, ballDragStart, ballStartPos
+
+openBall.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+        ballDragging = true
+        ballDragStart = input.Position
+        ballStartPos = openBall.Position
+        input.Changed:Connect(function()
+            if input.UserInputState == Enum.UserInputState.End then
+                ballDragging = false
+            end
+        end)
+    end
+end)
+
+openBall.InputChanged:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
+        ballDragInput = input
+    end
+end)
+
+uis.InputChanged:Connect(function(input)
+    if input == dragInput and dragging then
+        updateInput(input)
+    end
+    if input == ballDragInput and ballDragging then
+        local delta = input.Position - ballDragStart
+        openBall.Position = UDim2.new(ballStartPos.X.Scale, ballStartPos.X.Offset + delta.X, ballStartPos.Y.Scale, ballStartPos.Y.Offset + delta.Y)
+    end
+end)
 
 -- CHAMADAS DOS SCRIPTS AUTOMÁTICOS
 task.spawn(function()
