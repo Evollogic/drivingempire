@@ -5,7 +5,7 @@ local ts = game:GetService("TweenService")
 local http = game:GetService("HttpService")
 local lp = plyrs.LocalPlayer
 
-local CURRENT_VERSION = "2.4"
+local CURRENT_VERSION = "2.5"
 local VERSION_URL = "https://raw.githubusercontent.com/Evollogic/drivingempire/main/version.txt"
 local SCRIPT_URL = "https://raw.githubusercontent.com/Evollogic/drivingempire/main/Hub.lua"
 
@@ -79,7 +79,6 @@ local topBar = Instance.new("Frame", mainFrame)
 topBar.Size = UDim2.new(1, 0, 0, 35)
 topBar.BackgroundColor3 = Color3.fromRGB(20, 20, 25)
 topBar.BorderSizePixel = 0
--- Active = false permite que cliques passem para o mainFrame e ativem o arrastar
 topBar.Active = false 
 Instance.new("UICorner", topBar).CornerRadius = UDim.new(0, 12)
 
@@ -233,39 +232,45 @@ deliveryToggleBtn.MouseButton1Click:Connect(function()
 end)
 if getgenv().AutoFarmDelivery then task.spawn(function() if not lp.Character then lp.CharacterAdded:Wait() end task.wait(1) updateDeliveryUI() end) end
 
--- SISTEMA DE ARRASTAR GLOBAL (Permite arrastar de qualquer parte vazia da interface)
-local function makeDraggable(dragTarget)
-    local dragging = false
-    local dragStart = nil
-    local startPos = nil
+-- SISTEMA DE ARRASTAR CORRIGIDO (Fluido e preciso)
+local function makeDraggable(gui, dragHandle)
+    dragHandle = dragHandle or gui
+    local dragging
+    local dragInput
+    local dragStart
+    local startPos
 
-    dragTarget.InputBegan:Connect(function(input)
+    dragHandle.InputBegan:Connect(function(input)
         if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
             dragging = true
             dragStart = input.Position
-            startPos = dragTarget.Position
+            startPos = gui.Position
+
+            input.Changed:Connect(function()
+                if input.UserInputState == Enum.UserInputState.End then
+                    dragging = false
+                end
+            end)
+        end
+    end)
+
+    dragHandle.InputChanged:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
+            dragInput = input
         end
     end)
 
     uis.InputChanged:Connect(function(input)
-        if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+        if input == dragInput and dragging then
             local delta = input.Position - dragStart
-            dragTarget.Position = UDim2.new(
-                startPos.X.Scale, startPos.X.Offset + delta.X,
-                startPos.Y.Scale, startPos.Y.Offset + delta.Y
-            )
-        end
-    end)
-
-    uis.InputEnded:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-            dragging = false
+            gui.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
         end
     end)
 end
 
--- Ativa o arrastar em toda a janela principal e no botão flutuante
-makeDraggable(mainFrame)
+-- Atrela o arrasto tanto ao fundo da janela quanto à barra superior
+makeDraggable(mainFrame, mainFrame)
+makeDraggable(mainFrame, topBar)
 makeDraggable(openBall)
 
 -- CHAMADAS DOS SCRIPTS AUTOMÁTICOS
