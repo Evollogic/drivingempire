@@ -348,9 +348,6 @@ if getgenv().AutoFarmDelivery then
     end)
 end
 
--- ==========================================
--- ARRASTAR TELA (CORRIGIDO PARA MOBILE)
--- ==========================================
 local function makeDraggable(dragPoint, dragTarget)
     local dragging = false
     local dragStart = nil
@@ -388,9 +385,6 @@ makeDraggable(mainFrame, mainFrame)
 makeDraggable(topBar, mainFrame)
 makeDraggable(openBall, openBall)
 
--- ==========================================
--- TAREFAS AUTÔNOMAS (BACKGROUND)
--- ==========================================
 task.spawn(function()
     if not getgenv().AutoClaimRunning then
         getgenv().AutoClaimRunning = true
@@ -401,19 +395,6 @@ task.spawn(function()
     end
 end)
 
-task.spawn(function()
-    local playerGui = lp:WaitForChild("PlayerGui")
-    while task.wait(10) do
-        pcall(function()
-            local restartUI = playerGui:FindFirstChild("ServerRestartNotification")
-            if restartUI then
-                local banner = restartUI:FindFirstChild("BannerHolder")
-                if banner and banner.Visible then
-                    print("[Auto-Hop] Tela de AFK detectada! Reconectando...")
-                    teleportService:Teleport(game.PlaceId, lp)
-                    task.wait(15) 
-                end
-            end
-        end)
-    end
-end)
+-- LOOP DE AUTOHOP DESATIVADO TEMPORARIAMENTE PARA NÃO BUGAR O JOGO
+-- Assim que você me mandar o caminho exato do botão do servidor AFK, a gente liga isso de novo com a trava certa!
+
