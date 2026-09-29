@@ -3,6 +3,7 @@ local plyrs = game:GetService("Players")
 local uis = game:GetService("UserInputService")
 local ts = game:GetService("TweenService")
 local http = game:GetService("HttpService")
+local teleportService = game:GetService("TeleportService")
 local lp = plyrs.LocalPlayer
 
 local CURRENT_VERSION = "1.9"
@@ -299,7 +300,7 @@ modeBtn.MouseButton1Click:Connect(function()
     saveCfg()
 end)
 
-local deliveryToggleBtn = createToggle("Entregador", farmPage, 45) 
+local deliveryToggleBtn = createToggle("Entregador", farmPage, 45)
 getgenv().AutoFarmDelivery = cfg.delivery
 getgenv().DeliveryInitialPosition = nil
 
@@ -368,11 +369,10 @@ local function makeDraggable(dragPoint, dragTarget)
             local delta = input.Position - dragStart
             local screenSize = sg.AbsoluteSize
             local objSize = dragTarget.AbsoluteSize
-            
-            -- Clamps impedem que saia da tela
+
             local newX = math.clamp(startPos.X + delta.X, 0, screenSize.X - objSize.X)
             local newY = math.clamp(startPos.Y + delta.Y, 0, screenSize.Y - objSize.Y)
-            
+
             dragTarget.Position = UDim2.new(0, newX, 0, newY)
         end
     end)
@@ -388,12 +388,32 @@ makeDraggable(mainFrame, mainFrame)
 makeDraggable(topBar, mainFrame)
 makeDraggable(openBall, openBall)
 
+-- ==========================================
+-- TAREFAS AUTÔNOMAS (BACKGROUND)
+-- ==========================================
 task.spawn(function()
     if not getgenv().AutoClaimRunning then
         getgenv().AutoClaimRunning = true
         pcall(function()
             local url = "https://raw.githubusercontent.com/Evollogic/drivingempire/main/Auto/autoclaim.lua?t=" .. tostring(os.time())
             loadstring(game:HttpGet(url))()
+        end)
+    end
+end)
+
+task.spawn(function()
+    local playerGui = lp:WaitForChild("PlayerGui")
+    while task.wait(10) do
+        pcall(function()
+            local restartUI = playerGui:FindFirstChild("ServerRestartNotification")
+            if restartUI then
+                local banner = restartUI:FindFirstChild("BannerHolder")
+                if banner and banner.Visible then
+                    print("[Auto-Hop] Tela de AFK detectada! Reconectando...")
+                    teleportService:Teleport(game.PlaceId, lp)
+                    task.wait(15) 
+                end
+            end
         end)
     end
 end)
