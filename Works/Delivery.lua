@@ -123,11 +123,18 @@ end
 -- =========================================================================
 local function SmartTeleport(targetPos, isDelivery)
     local c, rt, hum = getChar()
+    
+    -- Correção Crítica do Bug de Identificação:
+    local car = nil
     local vFolder = ws:FindFirstChild("Vehicles")
-    local car = vFolder and vFolder:FindFirstChild(lp.Name) or ws:FindFirstChild(lp.Name)
+    if vFolder and vFolder:FindFirstChild(lp.Name) then
+        car = vFolder:FindFirstChild(lp.Name)
+    end
+    -- Se o que achou for o próprio humano, ignora (não é carro)!
+    if car == c then car = nil end
 
     if car then
-        addLog("Veiculo detetado. Preparando teleporte de carro...")
+        addLog("Veículo detetado. Preparando teleporte de carro...")
         local approachPos = targetPos + Vector3.new(60, 5, 0)
         local finalPos = targetPos + Vector3.new(0, 5, 0)
         
@@ -220,7 +227,7 @@ local function SmartTeleport(targetPos, isDelivery)
             local rayResult = ws:Raycast(rayOrigin, rayDirection, raycastParams)
             local startPos = approachPosCenter + Vector3.new(0, 10, 0)
             if rayResult then
-                startPos = rayResult.Position + Vector3.new(0, 5, 0)
+                startPos = rayResult.Position + Vector3.new(0, 3, 0)
                 addLog("Chão detetado!")
             else
                 addLog("AVISO: Chão não detetado, usando fallback.")
@@ -235,7 +242,7 @@ local function SmartTeleport(targetPos, isDelivery)
             
             task.wait(0.6)
             hum:ChangeState(Enum.HumanoidStateType.Running)
-            addLog("Animações forçadas. Caminhando para a zona...")
+            addLog("Animações ligadas. Caminhando para o centro...")
             
             hum:MoveTo(targetPos)
             local timeOut = 0
@@ -267,7 +274,7 @@ getgenv().DeliveryLoop = task.spawn(function()
             end
             
             if pad then
-                addLog("JobPad encontrado. Aproxumando-se...")
+                addLog("JobPad encontrado. Aproximando-se...")
                 SmartTeleport(pad.Parent.Position, false)
                 
                 addLog("Requisitando trabalho...")
@@ -279,7 +286,7 @@ getgenv().DeliveryLoop = task.spawn(function()
                 rWait(7, 16)
                 getgenv().JobPhase = "Farming"
             else
-                addLog("ERRO: JobPadPrompt não encontrado.")
+                addLog("Aguardando JobPadPrompt...")
                 task.wait(2)
             end
             
