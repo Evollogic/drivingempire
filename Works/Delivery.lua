@@ -1,9 +1,104 @@
-local ws,rs,lp=game:GetService("Workspace"),game:GetService("ReplicatedStorage"),game:GetService("Players").LocalPlayer
-local remotes=rs:WaitForChild("Remotes")
+local ws = game:GetService("Workspace")
+local rs = game:GetService("ReplicatedStorage")
+local players = game:GetService("Players")
+local lp = players.LocalPlayer
+local remotes = rs:WaitForChild("Remotes")
+local PathfindingService = game:GetService("PathfindingService")
 
-if getgenv().DeliveryLoop then pcall(task.cancel,getgenv().DeliveryLoop) end
-getgenv().AutoFarmDelivery,getgenv().JobPhase=true,"Init"
+if getgenv().DeliveryLoop then pcall(task.cancel, getgenv().DeliveryLoop) end
+getgenv().AutoFarmDelivery, getgenv().JobPhase = true, "Init"
 
+-- =========================================================================
+-- INTERFACE DE LOG (UI LOGGER)
+-- =========================================================================
+local coreGui = pcall(function() return game:GetService("CoreGui") end) and game:GetService("CoreGui") or lp:WaitForChild("PlayerGui")
+if coreGui:FindFirstChild("DeliveryLogger") then
+    coreGui.DeliveryLogger:Destroy()
+end
+
+local sg = Instance.new("ScreenGui", coreGui)
+sg.Name = "DeliveryLogger"
+
+local logFrame = Instance.new("Frame", sg)
+logFrame.Size = UDim2.new(0, 350, 0, 250)
+logFrame.Position = UDim2.new(1, -360, 0, 10)
+logFrame.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
+logFrame.BorderSizePixel = 0
+logFrame.Active = true
+logFrame.Draggable = true
+
+local UICorner = Instance.new("UICorner", logFrame)
+UICorner.CornerRadius = UDim.new(0, 8)
+
+local title = Instance.new("TextLabel", logFrame)
+title.Size = UDim2.new(1, -100, 0, 30)
+title.BackgroundTransparency = 1
+title.Text = " 📜 Logs de Entrega"
+title.TextColor3 = Color3.fromRGB(255, 255, 255)
+title.Font = Enum.Font.GothamBold
+title.TextSize = 14
+title.TextXAlignment = Enum.TextXAlignment.Left
+
+local copyBtn = Instance.new("TextButton", logFrame)
+copyBtn.Size = UDim2.new(0, 90, 0, 20)
+copyBtn.Position = UDim2.new(1, -95, 0, 5)
+copyBtn.BackgroundColor3 = Color3.fromRGB(0, 150, 255)
+copyBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+copyBtn.Text = "COPIAR LOG"
+copyBtn.Font = Enum.Font.GothamBold
+copyBtn.TextSize = 10
+Instance.new("UICorner", copyBtn).CornerRadius = UDim.new(0, 4)
+
+local scroll = Instance.new("ScrollingFrame", logFrame)
+scroll.Size = UDim2.new(1, -10, 1, -40)
+scroll.Position = UDim2.new(0, 5, 0, 35)
+scroll.BackgroundTransparency = 1
+scroll.ScrollBarThickness = 4
+scroll.CanvasSize = UDim2.new(0, 0, 0, 0)
+
+local uiList = Instance.new("UIListLayout", scroll)
+uiList.SortOrder = Enum.SortOrder.LayoutOrder
+uiList.Padding = UDim.new(0, 2)
+
+local fullLogText = ""
+local logCount = 0
+
+local function addLog(msg)
+    local timeStr = os.date("%H:%M:%S")
+    local finalMsg = "[" .. timeStr .. "] " .. msg
+    fullLogText = fullLogText .. finalMsg .. "\n"
+    logCount = logCount + 1
+    
+    local txt = Instance.new("TextLabel", scroll)
+    txt.Size = UDim2.new(1, 0, 0, 16)
+    txt.BackgroundTransparency = 1
+    txt.Text = finalMsg
+    txt.TextColor3 = Color3.fromRGB(200, 200, 200)
+    txt.Font = Enum.Font.Code
+    txt.TextSize = 11
+    txt.TextXAlignment = Enum.TextXAlignment.Left
+    txt.LayoutOrder = logCount
+    
+    scroll.CanvasSize = UDim2.new(0, 0, 0, logCount * 18)
+    scroll.CanvasPosition = Vector2.new(0, scroll.CanvasSize.Y.Offset)
+end
+
+copyBtn.MouseButton1Click:Connect(function()
+    pcall(function()
+        if setclipboard then
+            setclipboard(fullLogText)
+            copyBtn.Text = "COPIADO!"
+            task.wait(1.5)
+            copyBtn.Text = "COPIAR LOG"
+        end
+    end)
+end)
+
+addLog("Sistema de Logs Iniciado!")
+
+-- =========================================================================
+-- FUNÇÕES DE SUPORTE
+-- =========================================================================
 local function rWait(min, max)
     task.wait(math.random(min * 10, max * 10) / 10)
 end
@@ -24,7 +119,7 @@ local function getChar()
 end
 
 -- =========================================================================
--- FUNÇÃO DE TELEPORTE (CORREÇÃO DA STATE MACHINE DO HUMANOID)
+-- FUNÇÃO DE TELEPORTE (1 VEZ APENAS)
 -- =========================================================================
 local function SmartTeleport(targetPos, isDelivery)
     local c, rt, hum = getChar()
@@ -32,7 +127,7 @@ local function SmartTeleport(targetPos, isDelivery)
     local car = vFolder and vFolder:FindFirstChild(lp.Name) or ws:FindFirstChild(lp.Name)
 
     if car then
-        -- REGRAS DO CARRO MANTIDAS
+        addLog("Veiculo detetado. Preparando teleporte de carro...")
         local approachPos = targetPos + Vector3.new(60, 5, 0)
         local finalPos = targetPos + Vector3.new(0, 5, 0)
         
@@ -48,6 +143,7 @@ local function SmartTeleport(targetPos, isDelivery)
                     if pPart and not pPart.Anchored then
                         if (pPart.Position - currentPivot.Position).Magnitude <= 35 then
                             table.insert(modelsToMove, obj)
+                            addLog("Modelo engatado: " .. obj.Name)
                         end
                     end
                 end
@@ -83,33 +179,15 @@ local function SmartTeleport(targetPos, isDelivery)
             p.CFrame = delta * p.CFrame
         end
 
+        addLog("Esperando mapa carregar (1s)...")
         task.wait(1)
 
         local slideSteps = 20
-        if isDelivery then
-            for vez = 1, 3 do
-                local stepIn = (finalPos - approachPos) / slideSteps
-                for i = 1, slideSteps do
-                    for _, p in pairs(partsToMove) do p.CFrame = p.CFrame + stepIn end
-                    task.wait()
-                end
-                task.wait(0.3)
-                
-                if vez < 3 then
-                    local stepOut = (approachPos - finalPos) / slideSteps
-                    for i = 1, slideSteps do
-                        for _, p in pairs(partsToMove) do p.CFrame = p.CFrame + stepOut end
-                        task.wait()
-                    end
-                    task.wait(0.3)
-                end
-            end
-        else
-            local stepIn = (finalPos - approachPos) / slideSteps
-            for i = 1, slideSteps do
-                for _, p in pairs(partsToMove) do p.CFrame = p.CFrame + stepIn end
-                task.wait()
-            end
+        addLog("Deslizando para dentro da zona...")
+        local stepIn = (finalPos - approachPos) / slideSteps
+        for i = 1, slideSteps do
+            for _, p in pairs(partsToMove) do p.CFrame = p.CFrame + stepIn end
+            task.wait()
         end
 
         for _, p in pairs(partsToMove) do
@@ -120,15 +198,14 @@ local function SmartTeleport(targetPos, isDelivery)
                 p.RotVelocity = Vector3.zero
             end
         end
+        addLog("Chegou ao destino de carro com sucesso!")
         
         task.spawn(function()
             task.wait(5)
             if plat then plat:Destroy() end
         end)
     else
-        -- =====================================================================
-        -- REGRAS DO BONECO (STATE MACHINE FIX & WALK)
-        -- =====================================================================
+        addLog("A pé. Preparando caminhada (Humanoid)...")
         if rt and hum then
             local outOffset = Vector3.new(30, 0, 0)
             local approachPosCenter = targetPos + outOffset
@@ -139,91 +216,93 @@ local function SmartTeleport(targetPos, isDelivery)
             raycastParams.FilterDescendantsInstances = {c}
             raycastParams.FilterType = Enum.RaycastFilterType.Exclude
             
+            addLog("Calculando chão com Raycast...")
             local rayResult = ws:Raycast(rayOrigin, rayDirection, raycastParams)
-            -- Mete 5 studs acima para garantir que ele "cai" no chão
             local startPos = approachPosCenter + Vector3.new(0, 10, 0)
             if rayResult then
                 startPos = rayResult.Position + Vector3.new(0, 5, 0)
+                addLog("Chão detetado!")
+            else
+                addLog("AVISO: Chão não detetado, usando fallback.")
             end
             
-            -- 1. Teleporta e para a velocidade
             rt.Velocity = Vector3.zero
             rt.CFrame = CFrame.new(startPos)
             
-            -- 2. RESET DO ESTADO DO HUMANOID
             hum.PlatformStand = false
             hum.Sit = false
-            hum:ChangeState(Enum.HumanoidStateType.Freefall) -- Diz ao jogo que está a cair
+            hum:ChangeState(Enum.HumanoidStateType.Freefall) 
             
-            -- 3. Espera o boneco bater no chão de verdade
             task.wait(0.6)
-            
-            -- 4. FORÇA O ESTADO DE CORRIDA! Isto liga a animação das pernas.
             hum:ChangeState(Enum.HumanoidStateType.Running)
+            addLog("Animações forçadas. Caminhando para a zona...")
             
-            local function ForceWalk(destination)
-                hum:MoveTo(destination)
-                local timeOut = 0
-                while timeOut < 4 do -- Espera até 4 segundos para chegar
-                    local dist = (rt.Position * Vector3.new(1,0,1) - destination * Vector3.new(1,0,1)).Magnitude
-                    if dist < 3.5 then break end
-                    timeOut = timeOut + task.wait(0.1)
-                end
+            hum:MoveTo(targetPos)
+            local timeOut = 0
+            while timeOut < 4 do
+                local dist = (rt.Position * Vector3.new(1,0,1) - targetPos * Vector3.new(1,0,1)).Magnitude
+                if dist < 3.5 then break end
+                timeOut = timeOut + task.wait(0.1)
             end
-            
-            if isDelivery then
-                for vez = 1, 3 do
-                    ForceWalk(targetPos)
-                    task.wait(0.3)
-                    
-                    if vez < 3 then
-                        ForceWalk(startPos)
-                        task.wait(0.3)
-                    end
-                end
-            else
-                ForceWalk(targetPos)
-            end
+            addLog("Caminhada concluída!")
         end
     end
 end
--- =========================================================================
 
-getgenv().DeliveryLoop=task.spawn(function()
+-- =========================================================================
+-- LOOP PRINCIPAL
+-- =========================================================================
+getgenv().DeliveryLoop = task.spawn(function()
     while task.wait(0.5) do
         if not getgenv().AutoFarmDelivery then break end
         
-        if getgenv().JobPhase=="Init" then
+        if getgenv().JobPhase == "Init" then
             local mode = (getgenv().DeliveryMode == "Hard") and "HighRisk" or "Safe"
-            local pad=nil
+            local pad = nil
             for _,v in pairs(ws:GetDescendants()) do
-                if v:IsA("ProximityPrompt") and v.Name=="JobPadPrompt" then
-                    pad=v
+                if v:IsA("ProximityPrompt") and v.Name == "JobPadPrompt" then
+                    pad = v
                     break
                 end
             end
             
             if pad then
+                addLog("JobPad encontrado. Aproxumando-se...")
                 SmartTeleport(pad.Parent.Position, false)
+                
+                addLog("Requisitando trabalho...")
                 rWait(1, 1.5)
                 fRem("RequestStartJobSession", "Delivery", "jobPad", mode)
                 rWait(1, 1.5)
                 fRem("AttemptDeliveryPickup")
+                addLog("Trabalho aceite. Coletando caixa...")
                 rWait(7, 16)
-                getgenv().JobPhase="Farming"
+                getgenv().JobPhase = "Farming"
+            else
+                addLog("ERRO: JobPadPrompt não encontrado.")
+                task.wait(2)
             end
             
-        elseif getgenv().JobPhase=="Farming" then
+        elseif getgenv().JobPhase == "Farming" then
             local t = ws:FindFirstChild("DeliveryTargetAnchor")
             if t and t.Parent == ws then
+                addLog("Alvo de entrega encontrado!")
                 SmartTeleport(t.Position, true)
+                
+                addLog("Tentando completar entrega...")
                 for i = 1, 2 do
                     fRem("AttemptDeliveryComplete")
                     task.wait(0.5)
                 end
+                
+                addLog("Aguardando confirmação...")
                 rWait(1, 5)
                 fRem("AttemptDeliveryPickup")
+                addLog("Próxima entrega pedida.")
                 rWait(7, 16)
+            else
+                addLog("Aguardando Target Anchor aparecer...")
+                task.wait(1)
             end
         end
     end
