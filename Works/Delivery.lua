@@ -11,6 +11,96 @@ end
 getgenv().AutoFarmDelivery, getgenv().JobPhase = true, "Init"
 
 -- =========================================================================
+-- SISTEMA DE DEBUG UI (LOGS NA TELA)
+-- =========================================================================
+local coreGui = pcall(function() return game:GetService("CoreGui") end) and game:GetService("CoreGui") or lp.PlayerGui
+if coreGui:FindFirstChild("DeliveryDebug") then
+    coreGui.DeliveryDebug:Destroy()
+end
+
+local sg = Instance.new("ScreenGui", coreGui)
+sg.Name = "DeliveryDebug"
+
+local main = Instance.new("Frame", sg)
+main.Size = UDim2.new(0, 350, 0, 450)
+main.Position = UDim2.new(1, -360, 0.5, -225)
+main.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
+main.BorderSizePixel = 2
+main.BorderColor3 = Color3.fromRGB(100, 100, 100)
+main.Active = true
+main.Draggable = true
+
+local title = Instance.new("TextLabel", main)
+title.Size = UDim2.new(1, 0, 0, 30)
+title.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+title.TextColor3 = Color3.fromRGB(255, 255, 255)
+title.Text = " Terminal de Debug - Delivery"
+title.TextXAlignment = Enum.TextXAlignment.Left
+title.Font = Enum.Font.Code
+
+local scroll = Instance.new("ScrollingFrame", main)
+scroll.Size = UDim2.new(1, -10, 1, -80)
+scroll.Position = UDim2.new(0, 5, 0, 35)
+scroll.CanvasSize = UDim2.new(0, 0, 0, 0)
+scroll.AutomaticCanvasSize = Enum.AutomaticSize.Y
+scroll.BackgroundColor3 = Color3.fromRGB(15, 15, 15)
+scroll.ScrollBarThickness = 6
+
+local list = Instance.new("UIListLayout", scroll)
+list.SortOrder = Enum.SortOrder.LayoutOrder
+list.Padding = UDim.new(0, 2)
+
+local copyBtn = Instance.new("TextButton", main)
+copyBtn.Size = UDim2.new(1, -10, 0, 35)
+copyBtn.Position = UDim2.new(0, 5, 1, -40)
+copyBtn.BackgroundColor3 = Color3.fromRGB(50, 120, 50)
+copyBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+copyBtn.Font = Enum.Font.Code
+copyBtn.Text = "COPIAR TODOS OS LOGS"
+
+local allLogs = {}
+
+local function logMsg(msg)
+    local t = os.date("%H:%M:%S") .. " | " .. tostring(msg)
+    table.insert(allLogs, t)
+    
+    local txt = Instance.new("TextLabel", scroll)
+    txt.Size = UDim2.new(1, 0, 0, 0)
+    txt.AutomaticSize = Enum.AutomaticSize.Y
+    txt.BackgroundTransparency = 1
+    txt.TextColor3 = Color3.fromRGB(200, 200, 200)
+    txt.TextSize = 12
+    txt.Font = Enum.Font.Code
+    txt.TextXAlignment = Enum.TextXAlignment.Left
+    txt.TextWrapped = true
+    txt.Text = t
+    
+    -- Rola para o final automaticamente
+    scroll.CanvasPosition = Vector2.new(0, scroll.AbsoluteWindowSize.Y + 9999)
+    print(t)
+end
+
+copyBtn.MouseButton1Click:Connect(function()
+    local str = table.concat(allLogs, "\n")
+    if setclipboard then
+        setclipboard(str)
+        copyBtn.Text = "COPIADO PARA A ÁREA DE TRANSFERÊNCIA!"
+        copyBtn.BackgroundColor3 = Color3.fromRGB(50, 50, 120)
+        task.wait(2)
+        copyBtn.Text = "COPIAR TODOS OS LOGS"
+        copyBtn.BackgroundColor3 = Color3.fromRGB(50, 120, 50)
+    else
+        copyBtn.Text = "ERRO: setclipboard INEXISTENTE (F9)"
+        copyBtn.BackgroundColor3 = Color3.fromRGB(150, 50, 50)
+        task.wait(2)
+        copyBtn.Text = "COPIAR TODOS OS LOGS"
+        copyBtn.BackgroundColor3 = Color3.fromRGB(50, 120, 50)
+    end
+end)
+
+logMsg("Interface carregada. Aguardando eventos de teleporte...")
+
+-- =========================================================================
 -- FUNÇÕES DE SUPORTE
 -- =========================================================================
 local function rWait(min, max)
@@ -32,9 +122,6 @@ local function getChar()
     return c, (c and c:FindFirstChild("HumanoidRootPart")), (c and c:FindFirstChild("Humanoid"))
 end
 
--- =========================================================================
--- SIMULADOR DE BOTÕES (VIRTUAL INPUT)
--- =========================================================================
 local function simularBotao(nomeBotao, pressionar)
     local btn = lp.PlayerGui:FindFirstChild(nomeBotao, true)
     if btn then
@@ -56,9 +143,12 @@ local function simularBotao(nomeBotao, pressionar)
 end
 
 -- =========================================================================
--- FUNÇÃO DE TELEPORTE HÍBRIDA (ALTURA SEGURA DO ALVO)
+-- FUNÇÃO DE TELEPORTE COM LOGGING E PROTEÇÃO DE ÂNCORA
 -- =========================================================================
 local function SmartTeleport(targetPos, isDelivery)
+    logMsg("--- INICIANDO SMART TELEPORT ---")
+    logMsg("Alvo Pos: " .. tostring(targetPos))
+    
     local c, rt, hum = getChar()
     local car = nil
     
@@ -70,74 +160,100 @@ local function SmartTeleport(targetPos, isDelivery)
     end
 
     if car then
-        -- ==========================================
-        -- REGRAS DO CARRO (SEM VOAR PARA O CÉU)
-        -- ==========================================
+        logMsg("Modo: VEÍCULO. Carro detectado: " .. car.Name)
         local cPart = car.PrimaryPart or car:FindFirstChildWhichIsA("BasePart", true)
         local allVehicleParts = cPart:GetConnectedParts(true)
         local currentPivot = car:GetPivot()
         
-        -- Calcula a direção horizontal exata até ao alvo
+        logMsg("Pos Atual: " .. tostring(currentPivot.Position))
+        
         local flatCurrent = Vector3.new(currentPivot.Position.X, 0, currentPivot.Position.Z)
         local flatTarget = Vector3.new(targetPos.X, 0, targetPos.Z)
         local dir = Vector3.new(1, 0, 0)
-        if (flatCurrent - flatTarget).Magnitude > 1 then
+        
+        local dist = (flatCurrent - flatTarget).Magnitude
+        logMsg("Distância 2D até o alvo: " .. string.format("%.2f", dist))
+        
+        if dist > 1 then
             dir = (flatCurrent - flatTarget).Unit
         end
         
-        -- POSIÇÃO SEGURA: Usa a mesma altura (Y) do alvo de entrega, afastado 80 metros
+        -- Altura ajustada
         local startPos = Vector3.new(targetPos.X + (dir.X * 80), targetPos.Y + 4, targetPos.Z + (dir.Z * 80))
         local lookAt = Vector3.new(targetPos.X, startPos.Y, targetPos.Z)
         local destCFrame = CFrame.new(startPos, lookAt)
         
-        -- GHOST MODE: Desativa colisão da lataria, mantendo as rodas ativas no chão
+        logMsg("Calculado Destino CFrame: " .. tostring(startPos))
+        
         local estadosColisao = {}
+        local estadosAncora = {}
+        
+        logMsg("Preparando física (Ghost Mode e Anchoring)...")
         for _, p in pairs(allVehicleParts) do
             estadosColisao[p] = p.CanCollide
+            estadosAncora[p] = p.Anchored
+            
             local n = p.Name:lower()
             if not (n:match("wheel") or n:match("tire") or n:match("rim") or n:match("suspension")) then
                 p.CanCollide = false
             end
-            -- Para a inércia do carro para não voar rodopiando
+            
+            -- Congela a física para evitar explosão de constraints
+            p.Anchored = true
             p.AssemblyLinearVelocity = Vector3.zero
             p.AssemblyAngularVelocity = Vector3.zero
         end
         
-        -- FIX DO BUG DO CÉU: Move o carro inteiro como um bloco rígido (não quebra as constraints)
+        logMsg("Executando PivotTo...")
         car:PivotTo(destCFrame)
         
-        task.wait(0.5)
+        task.wait(0.2)
         
-        -- Condução automática em linha reta
+        logMsg("Restaurando Âncoras e checando velocidades...")
+        local velocidadeAlta = false
+        for _, p in pairs(allVehicleParts) do
+            if estadosAncora[p] ~= nil then
+                p.Anchored = estadosAncora[p]
+            end
+            if p.AssemblyLinearVelocity.Magnitude > 100 then
+                velocidadeAlta = true
+            end
+        end
+        
+        if velocidadeAlta then
+            logMsg("AVISO CRÍTICO: Alta velocidade detectada pós-PivotTo! (Fling iminente)")
+        else
+            logMsg("Física estável. Iniciando condução...")
+        end
+        
         simularBotao("Left", false)
         simularBotao("Right", false)
         simularBotao("Throttle", true)
         
         local timeOut = 0
         while timeOut < 6 do
-            local dist = (cPart.Position * Vector3.new(1,0,1) - targetPos * Vector3.new(1,0,1)).Magnitude
-            if dist < 15 then break end
+            local currentDist = (cPart.Position * Vector3.new(1,0,1) - targetPos * Vector3.new(1,0,1)).Magnitude
+            if currentDist < 15 then 
+                logMsg("Chegou no alvo de condução (Dist < 15). Trava acionada.")
+                break 
+            end
             timeOut = timeOut + task.wait(0.1)
         end
         
-        -- Chegou ao centro: Trava!
         simularBotao("Throttle", false)
         simularBotao("Brake", true)
         task.wait(0.8)
         simularBotao("Brake", false)
         
-        -- Restaura a colisão normal
+        logMsg("Restaurando colisões normais...")
         for _, p in pairs(allVehicleParts) do
             if estadosColisao[p] ~= nil then
                 p.CanCollide = estadosColisao[p]
             end
-            p.AssemblyLinearVelocity = Vector3.zero
-            p.AssemblyAngularVelocity = Vector3.zero
         end
+        logMsg("--- FIM DO TELEPORTE (VEÍCULO) ---")
     else
-        -- ==========================================
-        -- REGRAS A PÉ (FUNCIONANDO 100%)
-        -- ==========================================
+        logMsg("Modo: A PÉ. Calculando Raycast...")
         if rt and hum then
             local outOffset = Vector3.new(30, 0, 0)
             local approachPosCenter = targetPos + outOffset
@@ -151,6 +267,9 @@ local function SmartTeleport(targetPos, isDelivery)
             local startPos = approachPosCenter + Vector3.new(0, 10, 0)
             if rayResult then
                 startPos = rayResult.Position + Vector3.new(0, 3, 0)
+                logMsg("Raycast acertou: " .. rayResult.Instance.Name .. " em " .. tostring(rayResult.Position))
+            else
+                logMsg("AVISO: Raycast falhou em encontrar chão! Usando fallback Y+10.")
             end
             
             rt.Velocity = Vector3.zero
@@ -170,6 +289,7 @@ local function SmartTeleport(targetPos, isDelivery)
                 end
                 timeOut = timeOut + task.wait(0.1)
             end
+            logMsg("--- FIM DO TELEPORTE (A PÉ) ---")
         end
     end
 end
@@ -191,6 +311,7 @@ getgenv().DeliveryLoop = task.spawn(function()
                 end
             end
             if pad then
+                logMsg("Iniciando nova rota (" .. mode .. ")")
                 SmartTeleport(pad.Parent.Position, false)
                 rWait(1, 1.5); fRem("RequestStartJobSession", "Delivery", "jobPad", mode)
                 rWait(1, 1.5); fRem("AttemptDeliveryPickup")
