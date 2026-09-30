@@ -26,8 +26,8 @@ end
 
 -- =========================================================================
 -- FUNÇÃO DE TELEPORTE INTELIGENTE
--- Carros: Aparece a +60 e desliza suavemente até +3.
--- Bonecos: Queda normal de +60.
+-- Carros: Teleporta a +80m, SOLTA A FÍSICA e cai em queda livre natural.
+-- O jogo regista a entrada na zona porque o carro cai "vivo" (sem âncora).
 -- =========================================================================
 local function SmartTeleport(targetPos, isDelivery)
     local c, rt, hum = getChar()
@@ -35,11 +35,7 @@ local function SmartTeleport(targetPos, isDelivery)
     local car = vFolder and vFolder:FindFirstChild(lp.Name) or ws:FindFirstChild(lp.Name)
 
     if car then
-        local startHeight = 60
-        local endHeight = 3
-        local fallDistance = startHeight - endHeight
-        
-        -- Posição inicial no céu
+        local startHeight = 80 -- Altura segura para queda livre
         local finalPos = targetPos + Vector3.new(0, startHeight, 0)
         
         local destCFrame = CFrame.new(finalPos)
@@ -74,53 +70,45 @@ local function SmartTeleport(targetPos, isDelivery)
         plat.Transparency = 1 
         plat.Parent = ws
 
-        -- Congela Física
+        -- Congela Física apenas para o salto inicial
         for _, p in pairs(partsToMove) do
             estados[p] = p.Anchored
             p.Anchored = true
-            p.Velocity, p.RotVelocity = Vector3.zero, Vector3.zero
         end
 
-        -- 1. Teleporta para o céu (+60)
+        -- Teleporta para o céu (+80)
         for _, p in pairs(partsToMove) do
             p.CFrame = delta * p.CFrame
         end
 
-        -- Espera um pouco mais (0.5s) para garantir que o mapa lá em baixo renderiza
-        task.wait(0.5)
+        -- Pausa mínima para o Roblox registar a posição antes de soltar
+        task.wait(0.1)
 
-        -- 2. QUEDA CONTROLADA (Deslizando em linha reta para baixo)
-        -- Aumentei para 60 frames (~1 segundo de queda) para a descida ser mais lenta e visível
-        local steps = 60
-        local dropPerStep = fallDistance / steps
-        for i = 1, steps do
-            for _, p in pairs(partsToMove) do
-                p.CFrame = p.CFrame - Vector3.new(0, dropPerStep, 0)
-            end
-            task.wait() -- Pausa de 1 frame
-        end
-
-        -- 3. Descongela Física (agora vão pousar suavemente na plataforma)
+        -- SOLTA TUDO! (Queda Livre Natural)
         for p, state in pairs(estados) do
             if p and p.Parent then
                 p.Anchored = state
-                p.Velocity, p.RotVelocity = Vector3.zero, Vector3.zero
+                p.Velocity = Vector3.zero
+                p.RotVelocity = Vector3.zero
             end
         end
         
-        -- A plataforma fica lá durante 10 segundos
+        -- Tempo para a gravidade puxar o carro até bater na plataforma (~2 segundos)
+        task.wait(2)
+        
+        -- A plataforma fica lá durante 10 segundos para a entrega não deslizar
         task.spawn(function()
             task.wait(10)
             if plat then plat:Destroy() end
         end)
     else
-        -- REGRA PARA BONECO (Sem Carro) cai direto de +60
+        -- REGRA PARA BONECO (Sem Carro)
         if rt then
             rt.Velocity, rt.AssemblyLinearVelocity = Vector3.zero, Vector3.zero
             if isDelivery then
-                rt.CFrame = CFrame.new(targetPos + Vector3.new(10, 60, 10))
+                rt.CFrame = CFrame.new(targetPos + Vector3.new(10, 80, 10))
             else
-                rt.CFrame = CFrame.new(targetPos + Vector3.new(0, 60, 0))
+                rt.CFrame = CFrame.new(targetPos + Vector3.new(0, 80, 0))
             end
         end
     end
