@@ -3,8 +3,6 @@ local rs = game:GetService("ReplicatedStorage")
 local players = game:GetService("Players")
 local lp = players.LocalPlayer
 local remotes = rs:WaitForChild("Remotes")
-local PathfindingService = game:GetService("PathfindingService")
-local uis = game:GetService("UserInputService")
 
 if getgenv().DeliveryLoop then pcall(task.cancel, getgenv().DeliveryLoop) end
 getgenv().AutoFarmDelivery, getgenv().JobPhase = true, "Init"
@@ -34,7 +32,7 @@ UICorner.CornerRadius = UDim.new(0, 8)
 local title = Instance.new("TextLabel", logFrame)
 title.Size = UDim2.new(1, -100, 0, 30)
 title.BackgroundTransparency = 1
-title.Text = " 📜 Logs de Entrega e Condução"
+title.Text = " 📜 Logs de Condução e Entrega"
 title.TextColor3 = Color3.fromRGB(255, 255, 255)
 title.Font = Enum.Font.GothamBold
 title.TextSize = 14
@@ -98,30 +96,6 @@ end)
 addLog("Sistema de Logs Iniciado!")
 
 -- =========================================================================
--- DETETOR DE CONDUÇÃO (NOVO)
--- =========================================================================
-uis.InputBegan:Connect(function(input, gameProcessed)
-    -- Ignora se estiveres a escrever no chat
-    if gameProcessed then return end
-    
-    if input.KeyCode == Enum.KeyCode.W or input.KeyCode == Enum.KeyCode.Up then
-        addLog("▶️ AÇÃO: Acelerando (Pressionou W)")
-    elseif input.KeyCode == Enum.KeyCode.S or input.KeyCode == Enum.KeyCode.Down then
-        addLog("🛑 AÇÃO: Freando/Ré (Pressionou S)")
-    end
-end)
-
-uis.InputEnded:Connect(function(input, gameProcessed)
-    if gameProcessed then return end
-    
-    if input.KeyCode == Enum.KeyCode.W or input.KeyCode == Enum.KeyCode.Up then
-        addLog("⏸️ AÇÃO: Parou de Acelerar (Soltou W)")
-    elseif input.KeyCode == Enum.KeyCode.S or input.KeyCode == Enum.KeyCode.Down then
-        addLog("⏸️ AÇÃO: Parou de Frear (Soltou S)")
-    end
-end)
-
--- =========================================================================
 -- FUNÇÕES DE SUPORTE
 -- =========================================================================
 local function rWait(min, max)
@@ -144,6 +118,46 @@ local function getChar()
 end
 
 -- =========================================================================
+-- NOVO: DETETOR UNIVERSAL DE CONDUÇÃO (LÊ O BANCO DO CARRO)
+-- =========================================================================
+local currentSeat = nil
+local seatConnection = nil
+
+task.spawn(function()
+    while task.wait(0.5) do
+        local c, rt, hum = getChar()
+        if hum then
+            if hum.SeatPart ~= currentSeat then
+                currentSeat = hum.SeatPart
+                
+                -- Se conectou a um banco de carro
+                if currentSeat and currentSeat:IsA("VehicleSeat") then
+                    addLog("🚗 Conectado ao volante do carro!")
+                    
+                    if seatConnection then seatConnection:Disconnect() end
+                    
+                    -- Deteta sempre que a aceleração mudar (seja por toque, teclado ou comando)
+                    seatConnection = currentSeat:GetPropertyChangedSignal("Throttle"):Connect(function()
+                        local t = currentSeat.Throttle
+                        if t > 0 then
+                            addLog("▶️ ACELERANDO (Throttle: " .. tostring(t) .. ")")
+                        elseif t < 0 then
+                            addLog("🛑 FREANDO/RÉ (Throttle: " .. tostring(t) .. ")")
+                        else
+                            addLog("⏸️ PARADO (Throttle: 0)")
+                        end
+                    end)
+                elseif not currentSeat and seatConnection then
+                    seatConnection:Disconnect()
+                    seatConnection = nil
+                    addLog("Saiu do veículo.")
+                end
+            end
+        end
+    end
+end)
+
+-- =========================================================================
 -- FUNÇÃO DE TELEPORTE (INTACTA)
 -- =========================================================================
 local function SmartTeleport(targetPos, isDelivery)
@@ -158,7 +172,6 @@ local function SmartTeleport(targetPos, isDelivery)
     end
 
     if car then
-        addLog("Jogador sentado. Preparando teleporte de carro...")
         local approachPos = targetPos + Vector3.new(60, 5, 0)
         local finalPos = targetPos + Vector3.new(0, 5, 0)
         
@@ -174,7 +187,6 @@ local function SmartTeleport(targetPos, isDelivery)
                     if pPart and not pPart.Anchored then
                         if (pPart.Position - currentPivot.Position).Magnitude <= 35 then
                             table.insert(modelsToMove, obj)
-                            addLog("Modelo engatado: " .. obj.Name)
                         end
                     end
                 end
@@ -210,11 +222,9 @@ local function SmartTeleport(targetPos, isDelivery)
             p.CFrame = delta * p.CFrame
         end
 
-        addLog("Esperando mapa carregar (1s)...")
         task.wait(1)
 
         local slideSteps = 20
-        addLog("Deslizando para dentro da zona...")
         local stepIn = (finalPos - approachPos) / slideSteps
         for i = 1, slideSteps do
             for _, p in pairs(partsToMove) do p.CFrame = p.CFrame + stepIn end
@@ -229,14 +239,12 @@ local function SmartTeleport(targetPos, isDelivery)
                 p.RotVelocity = Vector3.zero
             end
         end
-        addLog("Chegou ao destino de carro com sucesso!")
         
         task.spawn(function()
             task.wait(5)
             if plat then plat:Destroy() end
         end)
     else
-        addLog("A pé. Preparando caminhada (Humanoid)...")
         if rt and hum then
             local outOffset = Vector3.new(30, 0, 0)
             local approachPosCenter = targetPos + outOffset
@@ -247,14 +255,10 @@ local function SmartTeleport(targetPos, isDelivery)
             raycastParams.FilterDescendantsInstances = {c}
             raycastParams.FilterType = Enum.RaycastFilterType.Exclude
             
-            addLog("Calculando chão com Raycast...")
             local rayResult = ws:Raycast(rayOrigin, rayDirection, raycastParams)
             local startPos = approachPosCenter + Vector3.new(0, 10, 0)
             if rayResult then
                 startPos = rayResult.Position + Vector3.new(0, 3, 0)
-                addLog("Chão detetado!")
-            else
-                addLog("AVISO: Chão não detetado, usando fallback.")
             end
             
             rt.Velocity = Vector3.zero
@@ -266,7 +270,6 @@ local function SmartTeleport(targetPos, isDelivery)
             
             task.wait(0.6)
             hum:ChangeState(Enum.HumanoidStateType.Running)
-            addLog("Animações ligadas. Caminhando para o centro...")
             
             hum:MoveTo(targetPos)
             local timeOut = 0
@@ -275,7 +278,6 @@ local function SmartTeleport(targetPos, isDelivery)
                 if dist < 3.5 then break end
                 timeOut = timeOut + task.wait(0.1)
             end
-            addLog("Caminhada concluída!")
         end
     end
 end
