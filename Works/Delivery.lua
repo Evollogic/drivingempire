@@ -49,7 +49,7 @@ local function simularBotao(nomeBotao, pressionar)
 end
 
 -- =========================================================================
--- FUNÇÃO DE TELEPORTE HÍBRIDA (CARRO FÍSICO COM GHOST MODE E A PÉ)
+-- FUNÇÃO DE TELEPORTE HÍBRIDA (ALTURA SEGURA DO ALVO)
 -- =========================================================================
 local function SmartTeleport(targetPos, isDelivery)
     local c, rt, hum = getChar()
@@ -64,15 +64,13 @@ local function SmartTeleport(targetPos, isDelivery)
 
     if car then
         -- ==========================================
-        -- REGRAS DO CARRO (GHOST MODE INTELIGENTE)
+        -- REGRAS DO CARRO (SEM VOAR PARA O CÉU)
         -- ==========================================
         local cPart = car.PrimaryPart or car:FindFirstChildWhichIsA("BasePart", true)
-        
-        -- CAPTURA INFALÍVEL: Pega no carro e na charrete sem quebrar amarras!
         local allVehicleParts = cPart:GetConnectedParts(true)
         local currentPivot = car:GetPivot()
         
-        -- Calcula de onde vens para desenhar a reta
+        -- Calcula a direção horizontal exata até ao alvo
         local flatCurrent = Vector3.new(currentPivot.Position.X, 0, currentPivot.Position.Z)
         local flatTarget = Vector3.new(targetPos.X, 0, targetPos.Z)
         local dir = Vector3.new(1, 0, 0)
@@ -80,48 +78,33 @@ local function SmartTeleport(targetPos, isDelivery)
             dir = (flatCurrent - flatTarget).Unit
         end
         
-        local approachPosCenter = targetPos + (dir * 90)
-        
-        -- Laser para colar o carro perfeitamente no chão
-        local rayOrigin = approachPosCenter + Vector3.new(0, 300, 0)
-        local raycastParams = RaycastParams.new()
-        raycastParams.FilterDescendantsInstances = {c, car, ws:FindFirstChild("Vehicles")} 
-        raycastParams.FilterType = Enum.RaycastFilterType.Exclude
-        
-        local rayResult = ws:Raycast(rayOrigin, Vector3.new(0, -600, 0), raycastParams)
-        local startPos = approachPosCenter + Vector3.new(0, 10, 0)
-        if rayResult then 
-            startPos = rayResult.Position + Vector3.new(0, 4, 0)
-        end
+        -- POSIÇÃO SEGURA: Usa a mesma altura (Y) do alvo de entrega, afastado 80 metros
+        local startPos = Vector3.new(targetPos.X + (dir.X * 80), targetPos.Y + 3, targetPos.Z + (dir.Z * 80))
         
         local lookAt = Vector3.new(targetPos.X, startPos.Y, targetPos.Z)
         local destCFrame = CFrame.new(startPos, lookAt)
         local delta = destCFrame * currentPivot:Inverse()
 
-        -- GHOST MODE: Desativa colisão da lataria, mas deixa as RODAS ativadas para tocar no chão!
+        -- GHOST MODE: Desativa colisão da lataria, mantendo as rodas ativas no chão
         local estadosColisao = {}
         for _, p in pairs(allVehicleParts) do
             estadosColisao[p] = p.CanCollide
             local n = p.Name:lower()
-            -- Se não for roda/pneu, atravessa paredes!
             if not (n:match("wheel") or n:match("tire") or n:match("rim") or n:match("suspension")) then
                 p.CanCollide = false
             end
-            
-            -- Para evitar o bug do void, zera a inércia antes de teleportar
             p.AssemblyLinearVelocity = Vector3.zero
             p.AssemblyAngularVelocity = Vector3.zero
         end
 
-        -- Teleporta o grupo mecânico inteiro mantendo os ângulos
+        -- Teleporta o carro e a charrete perfeitamente alinhados com a estrada
         for _, p in pairs(allVehicleParts) do 
             p.CFrame = delta * p.CFrame 
         end
 
-        -- Dá 1 segundo para a gravidade e as rodas assentarem no asfalto
-        task.wait(1)
+        task.wait(0.5)
 
-        -- CONDUÇÃO CINEMÁTICA E RETA (Sem colidir com o ambiente, apenas com o chão)
+        -- Condução automática em linha reta
         simularBotao("Left", false)
         simularBotao("Right", false)
         simularBotao("Throttle", true)
@@ -129,17 +112,17 @@ local function SmartTeleport(targetPos, isDelivery)
         local timeOut = 0
         while timeOut < 6 do
             local dist = (cPart.Position * Vector3.new(1,0,1) - targetPos * Vector3.new(1,0,1)).Magnitude
-            if dist < 20 then break end
+            if dist < 15 then break end
             timeOut = timeOut + task.wait(0.1)
         end
 
-        -- Chegou: Trava!
+        -- Chegou ao centro: Trava!
         simularBotao("Throttle", false)
         simularBotao("Brake", true)
-        task.wait(1)
+        task.wait(0.8)
         simularBotao("Brake", false)
         
-        -- Restaura a física normal para o jogo aceitar a entrega
+        -- Restaura a colisão normal
         for _, p in pairs(allVehicleParts) do
             if estadosColisao[p] ~= nil then p.CanCollide = estadosColisao[p] end
             p.AssemblyLinearVelocity = Vector3.zero
