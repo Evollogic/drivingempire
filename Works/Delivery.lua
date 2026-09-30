@@ -25,7 +25,7 @@ local function getChar()
 end
 
 -- =========================================================================
--- FUNÇÃO DE TELEPORTE INTELIGENTE E RIGOROSO (Sem bugs de física)
+-- FUNÇÃO DE TELEPORTE (BYPASS DE FRONTEIRA + MODO FANTASMA)
 -- =========================================================================
 local function SmartTeleport(targetPos)
     local c, rt, hum = getChar()
@@ -33,18 +33,20 @@ local function SmartTeleport(targetPos)
     local car = vFolder and vFolder:FindFirstChild(lp.Name) or ws:FindFirstChild(lp.Name)
 
     if car then
-        -- Altura mínima de segurança (5 studs acima do chão)
+        -- Ponto de Aproximação (60 metros para o lado)
+        local approachPos = targetPos + Vector3.new(60, 5, 0)
         local finalPos = targetPos + Vector3.new(0, 5, 0)
-        local destCFrame = CFrame.new(finalPos)
+        
         local currentPivot = car:GetPivot()
+        local destCFrame = CFrame.new(approachPos)
         local delta = destCFrame * currentPivot:Inverse()
 
         local modelsToMove = {car}
         
-        -- FILTRO RIGOROSO: Procura a charrete apenas nos modelos próximos, ignora peças soltas/lixo
+        -- Filtro Anti-Lixo
         for _, obj in pairs(ws:GetChildren()) do
             if obj:IsA("Model") and obj ~= car and obj ~= c then
-                if not obj:FindFirstChild("Humanoid") then -- Ignora outros jogadores
+                if not obj:FindFirstChild("Humanoid") then
                     local pPart = obj.PrimaryPart or obj:FindFirstChildWhichIsA("BasePart", true)
                     if pPart and not pPart.Anchored then
                         if (pPart.Position - currentPivot.Position).Magnitude <= 35 then
@@ -64,7 +66,6 @@ local function SmartTeleport(targetPos)
             end
         end
 
-        -- Cria plataforma exata no chão do alvo (Topo da plataforma = targetPos)
         local plat = Instance.new("Part")
         plat.Size = Vector3.new(150, 5, 150)
         plat.Position = targetPos - Vector3.new(0, 2.5, 0)
@@ -72,40 +73,58 @@ local function SmartTeleport(targetPos)
         plat.Transparency = 1 
         plat.Parent = ws
 
-        -- 1. Congela a física e para toda a inércia
+        -- 1. Congela tudo e DESATIVA A COLISÃO (Fantasma)
+        local estadosColisao = {}
         for _, p in pairs(partsToMove) do
+            estadosColisao[p] = p.CanCollide
+            p.CanCollide = false -- Atravessa paredes, árvores e prédios
             p.Anchored = true
             p.Velocity = Vector3.zero
             p.RotVelocity = Vector3.zero
         end
 
-        -- 2. Teleporta tudo diretamente para +5 metros
+        -- Teleporta para o Ponto de Aproximação
         for _, p in pairs(partsToMove) do
             p.CFrame = delta * p.CFrame
         end
 
-        -- 3. Espera 0.5s para o mapa do jogo carregar em baixo de ti
         task.wait(0.5)
 
-        -- 4. Descongela e zera inércia DE NOVO (Isto evita o "chute" do servidor)
+        -- 2. DESLIZA PARA DENTRO DA ZONA (Sem colidir com nada no caminho)
+        local slideSteps = 30
+        local stepVec = (finalPos - approachPos) / slideSteps
+        
+        for i = 1, slideSteps do
+            for _, p in pairs(partsToMove) do
+                p.CFrame = p.CFrame + stepVec
+            end
+            task.wait() 
+        end
+
+        -- 3. Descongela, estabiliza e RESTAURA A COLISÃO no centro
         for _, p in pairs(partsToMove) do
             if p and p.Parent then
                 p.Anchored = false
+                if estadosColisao[p] ~= nil then
+                    p.CanCollide = estadosColisao[p] -- Volta ao normal
+                end
                 p.Velocity = Vector3.zero
                 p.RotVelocity = Vector3.zero
             end
         end
         
-        -- Apaga plataforma ao fim de 3 segundos
         task.spawn(function()
-            task.wait(3)
+            task.wait(5)
             if plat then plat:Destroy() end
         end)
     else
-        -- REGRA PARA BONECO (Vai a pé, cai de 5m apenas)
-        if rt then
+        -- REGRA PARA BONECO (A Pé)
+        if rt and hum then
             rt.Velocity, rt.AssemblyLinearVelocity = Vector3.zero, Vector3.zero
-            rt.CFrame = CFrame.new(targetPos + Vector3.new(0, 5, 0))
+            rt.CFrame = CFrame.new(targetPos + Vector3.new(30, 4, 0))
+            task.wait(0.2)
+            hum:MoveTo(targetPos)
+            task.wait(1.5)
         end
     end
 end
