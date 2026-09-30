@@ -26,8 +26,8 @@ end
 
 -- =========================================================================
 -- FUNÇÃO DE TELEPORTE INTELIGENTE
--- Carros: Teleporte baixo (+3) em cima de uma plataforma plana que dura 10s.
--- Bonecos: Queda normal (+50).
+-- Carros: Aparece a +60 e faz uma "Queda Controlada" (deslizando reto) até +3.
+-- Bonecos: Queda normal de +60.
 -- =========================================================================
 local function SmartTeleport(targetPos, isDelivery)
     local c, rt, hum = getChar()
@@ -35,8 +35,12 @@ local function SmartTeleport(targetPos, isDelivery)
     local car = vFolder and vFolder:FindFirstChild(lp.Name) or ws:FindFirstChild(lp.Name)
 
     if car then
-        -- FINAL POS: Muito perto do chão
-        local finalPos = targetPos + Vector3.new(0, 3, 0)
+        local startHeight = 60
+        local endHeight = 3
+        local fallDistance = startHeight - endHeight
+        
+        -- Posição inicial no céu
+        local finalPos = targetPos + Vector3.new(0, startHeight, 0)
         
         local destCFrame = CFrame.new(finalPos)
         local currentPivot = car:GetPivot()
@@ -45,6 +49,7 @@ local function SmartTeleport(targetPos, isDelivery)
         local partsToMove = {}
         local estados = {}
 
+        -- Captura Carro + Charrete (Raio de 35)
         for _, p in pairs(ws:GetDescendants()) do
             if p:IsA("BasePart") and not p.Anchored then
                 local dist = (p.Position - currentPivot.Position).Magnitude
@@ -61,10 +66,10 @@ local function SmartTeleport(targetPos, isDelivery)
             end
         end
 
-        -- Cria plataforma plana gigante para evitar o relevo do mapa
+        -- Cria plataforma plana gigante no chão para receber o carro
         local plat = Instance.new("Part")
         plat.Size = Vector3.new(150, 4, 150)
-        plat.Position = targetPos - Vector3.new(0, 2, 0) -- Fica exatamente sob os pneus
+        plat.Position = targetPos - Vector3.new(0, 2, 0)
         plat.Anchored = true
         plat.Transparency = 1 
         plat.Parent = ws
@@ -76,15 +81,26 @@ local function SmartTeleport(targetPos, isDelivery)
             p.Velocity, p.RotVelocity = Vector3.zero, Vector3.zero
         end
 
-        -- Teleporta tudo (Carro + Charrete) para cima da plataforma
+        -- 1. Teleporta para o céu (+60)
         for _, p in pairs(partsToMove) do
             p.CFrame = delta * p.CFrame
         end
 
-        -- Tempo rápido para carregar o mapa (0.3s)
+        -- Espera um bocadinho para o mapa renderizar lá em baixo
         task.wait(0.3)
 
-        -- Descongela Física (agora vão pousar suavemente na plataforma invisível)
+        -- 2. QUEDA CONTROLADA (Deslizando em linha reta para baixo)
+        -- Descemos o carro suavemente ao longo de 35 passos
+        local steps = 35
+        local dropPerStep = fallDistance / steps
+        for i = 1, steps do
+            for _, p in pairs(partsToMove) do
+                p.CFrame = p.CFrame - Vector3.new(0, dropPerStep, 0)
+            end
+            task.wait() -- Pausa de 1 frame para criar o efeito visual de deslize
+        end
+
+        -- 3. Descongela Física (agora vão pousar suavemente na plataforma)
         for p, state in pairs(estados) do
             if p and p.Parent then
                 p.Anchored = state
@@ -92,20 +108,19 @@ local function SmartTeleport(targetPos, isDelivery)
             end
         end
         
-        -- O SEGREDO: A plataforma fica lá durante 10 segundos!
-        -- Assim o carro fica 100% parado sem rolar com o relevo durante a entrega.
+        -- A plataforma fica lá durante 10 segundos!
         task.spawn(function()
             task.wait(10)
             if plat then plat:Destroy() end
         end)
     else
-        -- REGRA PARA BONECO (Sem Carro)
+        -- REGRA PARA BONECO (Sem Carro) cai direto de +60
         if rt then
             rt.Velocity, rt.AssemblyLinearVelocity = Vector3.zero, Vector3.zero
             if isDelivery then
-                rt.CFrame = CFrame.new(targetPos + Vector3.new(10, 50, 10))
+                rt.CFrame = CFrame.new(targetPos + Vector3.new(10, 60, 10))
             else
-                rt.CFrame = CFrame.new(targetPos + Vector3.new(0, 50, 0))
+                rt.CFrame = CFrame.new(targetPos + Vector3.new(0, 60, 0))
             end
         end
     end
