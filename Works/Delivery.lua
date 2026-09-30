@@ -1,5 +1,6 @@
 local ws,rs,lp=game:GetService("Workspace"),game:GetService("ReplicatedStorage"),game:GetService("Players").LocalPlayer
 local remotes=rs:WaitForChild("Remotes")
+local PathfindingService = game:GetService("PathfindingService")
 
 if getgenv().DeliveryLoop then pcall(task.cancel,getgenv().DeliveryLoop) end
 getgenv().AutoFarmDelivery,getgenv().JobPhase=true,"Init"
@@ -24,8 +25,7 @@ local function getChar()
 end
 
 -- =========================================================================
--- FUNÇÃO DE TELEPORTE (BYPASS DE FRONTEIRA)
--- Humanoide: Força a animação de andar usando um loop e o MoveTo().
+-- FUNÇÃO DE TELEPORTE (CARRO MODO FANTASMA / BONECO PATHFINDING)
 -- =========================================================================
 local function SmartTeleport(targetPos)
     local c, rt, hum = getChar()
@@ -33,6 +33,7 @@ local function SmartTeleport(targetPos)
     local car = vFolder and vFolder:FindFirstChild(lp.Name) or ws:FindFirstChild(lp.Name)
 
     if car then
+        -- (A tua regra do carro continua perfeita com o modo fantasma)
         local approachPos = targetPos + Vector3.new(60, 5, 0)
         local finalPos = targetPos + Vector3.new(0, 5, 0)
         
@@ -111,32 +112,52 @@ local function SmartTeleport(targetPos)
             if plat then plat:Destroy() end
         end)
     else
-        -- REGRA PARA BONECO (Andar Verdadeiro)
+        -- =====================================================================
+        -- REGRA PARA BONECO (PATHFINDING VERDADEIRO)
+        -- =====================================================================
         if rt and hum then
             rt.Velocity, rt.AssemblyLinearVelocity = Vector3.zero, Vector3.zero
             
-            -- Ponto inicial no chão (30 studs de distância)
-            local startPos = targetPos + Vector3.new(30, 3, 0)
-            rt.CFrame = CFrame.new(startPos)
+            -- 1. Teleporta para o ar (30 studs ao lado) e deixa a gravidade puxar para o chão
+            rt.CFrame = CFrame.new(targetPos + Vector3.new(30, 10, 0))
+            task.wait(1) -- Tempo essencial para os pés tocarem no chão físico do mapa
             
-            -- Espera a física de queda e gravidade estabilizar o boneco no chão
-            task.wait(0.5)
+            -- 2. Cria o trajeto (Path)
+            local path = PathfindingService:CreatePath({
+                AgentRadius = 2,
+                AgentHeight = 5,
+                AgentCanJump = true
+            })
             
-            -- LOOP PARA FORÇAR A ANIMAÇÃO DE ANDAR
-            -- O loop só para quando o boneco estiver a menos de 3 studs do alvo
-            local maxTime = 10 -- Evita o loop infinito se o boneco ficar preso
-            local startTime = tick()
+            -- Calcula a rota no mapa
+            local success, errorMessage = pcall(function()
+                path:ComputeAsync(rt.Position, targetPos)
+            end)
             
-            while (rt.Position - targetPos).Magnitude > 3 do
-                if tick() - startTime > maxTime then break end
+            if success and path.Status == Enum.PathStatus.Success then
+                -- O boneco vai seguir ponto por ponto com animação
+                local waypoints = path:GetWaypoints()
                 
-                -- Pede ao jogo para mover as pernas na direção do alvo
+                for _, waypoint in ipairs(waypoints) do
+                    -- Se a rota disser que tem um passeio ou obstáculo, o boneco salta!
+                    if waypoint.Action == Enum.PathWaypointAction.Jump then
+                        hum.Jump = true
+                    end
+                    
+                    -- Anda até ao pontinho invisível
+                    hum:MoveTo(waypoint.Position)
+                    
+                    -- Espera o boneco chegar fisicamente ao ponto antes de ir pro próximo
+                    local reached = hum.MoveToFinished:Wait()
+                    if not reached then
+                        break -- Se travar, cancela
+                    end
+                end
+            else
+                -- Se não conseguir gerar o caminho (ex: mapa sem chão), vai num tiro só
                 hum:MoveTo(targetPos)
-                task.wait(0.1) -- Atualiza o comando a cada 0.1s para o jogo não cancelar
+                task.wait(2)
             end
-            
-            -- Força a paragem
-            hum:MoveTo(rt.Position)
         end
     end
 end
