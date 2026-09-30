@@ -24,12 +24,16 @@ local function getChar()
     return c, (c and c:FindFirstChild("HumanoidRootPart")), (c and c:FindFirstChild("Humanoid"))
 end
 
-local function SmartTeleport(targetPos)
+-- =========================================================================
+-- FUNÇÃO DE TELEPORTE (ANIMAÇÃO CORRIGIDA + REGRA DAS 3 VEZES)
+-- =========================================================================
+local function SmartTeleport(targetPos, isDelivery)
     local c, rt, hum = getChar()
     local vFolder = ws:FindFirstChild("Vehicles")
     local car = vFolder and vFolder:FindFirstChild(lp.Name) or ws:FindFirstChild(lp.Name)
 
     if car then
+        -- REGRAS DO CARRO
         local approachPos = targetPos + Vector3.new(60, 5, 0)
         local finalPos = targetPos + Vector3.new(0, 5, 0)
         
@@ -80,24 +84,44 @@ local function SmartTeleport(targetPos)
             p.CFrame = delta * p.CFrame
         end
 
-        task.wait(1) -- Tempo extra para carregar mapa do carro
+        task.wait(1)
 
-        local slideSteps = 30
-        local stepVec = (finalPos - approachPos) / slideSteps
+        local slideSteps = 20
         
-        for i = 1, slideSteps do
-            for _, p in pairs(partsToMove) do
-                p.CFrame = p.CFrame + stepVec
+        if isDelivery then
+            -- ENTRA E SAI 3 VEZES DE CARRO
+            for vez = 1, 3 do
+                -- Desliza para DENTRO
+                local stepIn = (finalPos - approachPos) / slideSteps
+                for i = 1, slideSteps do
+                    for _, p in pairs(partsToMove) do p.CFrame = p.CFrame + stepIn end
+                    task.wait()
+                end
+                task.wait(0.3)
+                
+                -- Desliza para FORA (exceto na última vez)
+                if vez < 3 then
+                    local stepOut = (approachPos - finalPos) / slideSteps
+                    for i = 1, slideSteps do
+                        for _, p in pairs(partsToMove) do p.CFrame = p.CFrame + stepOut end
+                        task.wait()
+                    end
+                    task.wait(0.3)
+                end
             end
-            task.wait() 
+        else
+            -- SE NÃO FOR ENTREGA, ENTRA SÓ 1 VEZ
+            local stepIn = (finalPos - approachPos) / slideSteps
+            for i = 1, slideSteps do
+                for _, p in pairs(partsToMove) do p.CFrame = p.CFrame + stepIn end
+                task.wait()
+            end
         end
 
         for _, p in pairs(partsToMove) do
             if p and p.Parent then
                 p.Anchored = false
-                if estadosColisao[p] ~= nil then
-                    p.CanCollide = estadosColisao[p]
-                end
+                if estadosColisao[p] ~= nil then p.CanCollide = estadosColisao[p] end
                 p.Velocity = Vector3.zero
                 p.RotVelocity = Vector3.zero
             end
@@ -108,72 +132,78 @@ local function SmartTeleport(targetPos)
             if plat then plat:Destroy() end
         end)
     else
+        -- =====================================================================
+        -- REGRAS DO BONECO (A PÉ)
+        -- =====================================================================
         if rt and hum then
-            rt.Velocity, rt.AssemblyLinearVelocity = Vector3.zero, Vector3.zero
+            -- Descobre o chão antes de teleportar para NÃO congelar o boneco
+            local outOffset = Vector3.new(30, 0, 0)
+            local approachPosCenter = targetPos + outOffset
             
-            local offsetHorizontal = targetPos + Vector3.new(30, 0, 0)
-            local rayOrigin = offsetHorizontal + Vector3.new(0, 200, 0)
+            local rayOrigin = approachPosCenter + Vector3.new(0, 200, 0)
             local rayDirection = Vector3.new(0, -400, 0)
-            
             local raycastParams = RaycastParams.new()
             raycastParams.FilterDescendantsInstances = {c}
             raycastParams.FilterType = Enum.RaycastFilterType.Exclude
             
-            -- FORÇA O BONECO A FICAR NO AR ENQUANTO O CHÃO NÃO CARREGA
-            rt.CFrame = CFrame.new(rayOrigin)
-            rt.Anchored = true
-            
-            local rayResult = nil
-            local timeout = 5 -- Espera até 5 segundos o mapa renderizar
-            local startTime = tick()
-            
-            while tick() - startTime < timeout do
-                rayResult = ws:Raycast(rayOrigin, rayDirection, raycastParams)
-                if rayResult then break end
-                task.wait(0.2)
-            end
-            
-            local spawnNoChao = offsetHorizontal + Vector3.new(0, 5, 0)
+            local rayResult = ws:Raycast(rayOrigin, rayDirection, raycastParams)
+            local startPos = approachPosCenter + Vector3.new(0, 4, 0)
             if rayResult then
-                spawnNoChao = rayResult.Position + Vector3.new(0, 3, 0)
+                startPos = rayResult.Position + Vector3.new(0, 3, 0)
             end
             
-            rt.CFrame = CFrame.new(spawnNoChao)
-            rt.Anchored = false -- Solta o boneco
+            -- Teleporta o boneco solto
+            rt.Velocity = Vector3.zero
+            rt.CFrame = CFrame.new(startPos)
+            task.wait(0.3)
+            
+            -- O SEGREDO: Força um pequeno salto para acordar o script de animação do Roblox
+            hum.Jump = true
             task.wait(0.2)
             
-            local path = PathfindingService:CreatePath({
-                AgentRadius = 2,
-                AgentHeight = 5,
-                AgentCanJump = true
-            })
-            
-            local success, _ = pcall(function()
-                path:ComputeAsync(rt.Position, targetPos)
-            end)
-            
-            if success and path.Status == Enum.PathStatus.Success then
-                local waypoints = path:GetWaypoints()
-                for _, waypoint in ipairs(waypoints) do
-                    if waypoint.Action == Enum.PathWaypointAction.Jump then
-                        hum.Jump = true
+            -- Função para andar até um ponto usando Pathfinding
+            local function ForceWalk(destination)
+                local path = PathfindingService:CreatePath({AgentRadius = 2, AgentHeight = 5, AgentCanJump = true})
+                pcall(function() path:ComputeAsync(rt.Position, destination) end)
+                
+                if path.Status == Enum.PathStatus.Success then
+                    local waypoints = path:GetWaypoints()
+                    for _, waypoint in ipairs(waypoints) do
+                        if waypoint.Action == Enum.PathWaypointAction.Jump then hum.Jump = true end
+                        hum:MoveTo(waypoint.Position)
+                        
+                        local timeOut = 0
+                        while timeOut < 2 do
+                            local dist = (rt.Position * Vector3.new(1,0,1) - waypoint.Position * Vector3.new(1,0,1)).Magnitude
+                            if dist < 2.5 then break end
+                            timeOut = timeOut + task.wait()
+                        end
                     end
-                    hum:MoveTo(waypoint.Position)
+                else
+                    hum:MoveTo(destination)
+                    task.wait(1.5)
+                end
+            end
+            
+            if isDelivery then
+                -- A DANÇA DAS 3 VEZES PARA O BONECO
+                for vez = 1, 3 do
+                    ForceWalk(targetPos) -- Anda para o centro da zona
+                    task.wait(0.3)
                     
-                    local timeOut = 0
-                    while timeOut < 2 do
-                        local dist = (rt.Position * Vector3.new(1,0,1) - waypoint.Position * Vector3.new(1,0,1)).Magnitude
-                        if dist < 2.5 then break end
-                        timeOut = timeOut + task.wait()
+                    if vez < 3 then
+                        ForceWalk(startPos) -- Anda de volta para fora
+                        task.wait(0.3)
                     end
                 end
             else
-                hum:MoveTo(targetPos)
-                task.wait(2)
+                -- Apenas anda para apanhar o serviço
+                ForceWalk(targetPos)
             end
         end
     end
 end
+-- =========================================================================
 
 getgenv().DeliveryLoop=task.spawn(function()
     while task.wait(0.5) do
@@ -190,7 +220,7 @@ getgenv().DeliveryLoop=task.spawn(function()
             end
             
             if pad then
-                SmartTeleport(pad.Parent.Position)
+                SmartTeleport(pad.Parent.Position, false)
                 rWait(1, 1.5)
                 fRem("RequestStartJobSession", "Delivery", "jobPad", mode)
                 rWait(1, 1.5)
@@ -202,7 +232,7 @@ getgenv().DeliveryLoop=task.spawn(function()
         elseif getgenv().JobPhase=="Farming" then
             local t = ws:FindFirstChild("DeliveryTargetAnchor")
             if t and t.Parent == ws then
-                SmartTeleport(t.Position)
+                SmartTeleport(t.Position, true)
                 for i = 1, 2 do
                     fRem("AttemptDeliveryComplete")
                     task.wait(0.5)
