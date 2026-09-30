@@ -5,7 +5,7 @@ local ts = game:GetService("TweenService")
 local http = game:GetService("HttpService")
 local lp = plyrs.LocalPlayer
 
-local CURRENT_VERSION = "2.7"
+local CURRENT_VERSION = "2.8"
 local VERSION_URL = "https://raw.githubusercontent.com/Evollogic/drivingempire/main/version.txt"
 local SCRIPT_URL = "https://raw.githubusercontent.com/Evollogic/drivingempire/main/Hub.lua"
 
@@ -75,9 +75,9 @@ mainStroke.Thickness = 2.5
 mainStroke.Transparency = 0
 local strokeGradient = Instance.new("UIGradient", mainStroke)
 strokeGradient.Color = ColorSequence.new({
-    ColorSequenceKeypoint.new(0, 255, 255),
-    ColorSequenceKeypoint.new(138, 43, 226),
-    ColorSequenceKeypoint.new(0, 255, 255)
+    ColorSequenceKeypoint.new(0, Color3.fromRGB(0, 255, 255)),
+    ColorSequenceKeypoint.new(0.5, Color3.fromRGB(138, 43, 226)),
+    ColorSequenceKeypoint.new(1, Color3.fromRGB(0, 255, 255))
 })
 
 task.spawn(function()
@@ -125,7 +125,6 @@ minBtn.TextSize = 14
 Instance.new("UICorner", minBtn).CornerRadius = UDim.new(0, 6)
 
 minBtn.MouseButton1Click:Connect(function() mainFrame.Visible = false; openBall.Visible = true end)
-openBall.MouseButton1Click:Connect(function() mainFrame.Visible = true; openBall.Visible = false end)
 
 -- ABAS
 local tabContainer = Instance.new("Frame", mainFrame)
@@ -251,7 +250,7 @@ deliveryToggleBtn.MouseButton1Click:Connect(function()
 end)
 if getgenv().AutoFarmDelivery then task.spawn(function() if not lp.Character then lp.CharacterAdded:Wait() end task.wait(1) updateDeliveryUI() end) end
 
--- SISTEMA DE ARRASTAR DEFINITIVO
+-- SISTEMA DE ARRASTAR (Painel Principal)
 local dragging = false
 local dragInput, dragStart, startPos
 
@@ -267,9 +266,11 @@ local function setupDraggable(guiObject, moveObject)
             dragStart = input.Position
             startPos = moveObject.Position
 
-            input.Changed:Connect(function()
+            local endConn
+            endConn = input.Changed:Connect(function()
                 if input.UserInputState == Enum.UserInputState.End then
                     dragging = false
+                    endConn:Disconnect()
                 end
             end)
         end
@@ -285,18 +286,29 @@ end
 setupDraggable(mainFrame, mainFrame)
 setupDraggable(topBar, mainFrame)
 
--- Arrasto independente para o botão flutuante
+-- SISTEMA HÍBRIDO (ARRASTAR + CLIQUE) PARA A BOLINHA
 local ballDragging = false
 local ballDragInput, ballDragStart, ballStartPos
+local dragDistance = 0
 
 openBall.InputBegan:Connect(function(input)
     if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
         ballDragging = true
+        dragDistance = 0
         ballDragStart = input.Position
         ballStartPos = openBall.Position
-        input.Changed:Connect(function()
+        
+        local endConn
+        endConn = input.Changed:Connect(function()
             if input.UserInputState == Enum.UserInputState.End then
                 ballDragging = false
+                endConn:Disconnect()
+                
+                -- Se a distância arrastada for quase nula, aciona como clique!
+                if dragDistance < 5 then
+                    mainFrame.Visible = true
+                    openBall.Visible = false
+                end
             end
         end)
     end
@@ -314,6 +326,7 @@ uis.InputChanged:Connect(function(input)
     end
     if input == ballDragInput and ballDragging then
         local delta = input.Position - ballDragStart
+        dragDistance = delta.Magnitude -- Mede o arrasto total
         openBall.Position = UDim2.new(ballStartPos.X.Scale, ballStartPos.X.Offset + delta.X, ballStartPos.Y.Scale, ballStartPos.Y.Offset + delta.Y)
     end
 end)
