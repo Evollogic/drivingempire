@@ -119,19 +119,31 @@ local function getChar()
 end
 
 -- =========================================================================
--- FUNÇÃO DE TELEPORTE (1 VEZ APENAS)
+-- FUNÇÃO DE TELEPORTE
 -- =========================================================================
 local function SmartTeleport(targetPos, isDelivery)
     local c, rt, hum = getChar()
     
-    -- Correção Crítica do Bug de Identificação:
+    -- VERIFICAÇÃO RIGOROSA: Estou mesmo no carro?
     local car = nil
     local vFolder = ws:FindFirstChild("Vehicles")
+    
     if vFolder and vFolder:FindFirstChild(lp.Name) then
-        car = vFolder:FindFirstChild(lp.Name)
+        local foundCar = vFolder:FindFirstChild(lp.Name)
+        
+        -- Garante que não está a ler o próprio corpo
+        if foundCar ~= c then
+            -- Verifica se o jogador está perto do carro ou sentado nele
+            local distToCar = (foundCar:GetPivot().Position - c:GetPivot().Position).Magnitude
+            local isSittingInCar = hum and hum.SeatPart and hum.SeatPart:IsDescendantOf(foundCar)
+            
+            if distToCar < 25 or isSittingInCar then
+                car = foundCar
+            else
+                addLog("Carro ignorado (muito longe: " .. math.floor(distToCar) .. " studs).")
+            end
+        end
     end
-    -- Se o que achou for o próprio humano, ignora (não é carro)!
-    if car == c then car = nil end
 
     if car then
         addLog("Veículo detetado. Preparando teleporte de carro...")
