@@ -26,7 +26,7 @@ end
 
 -- =========================================================================
 -- FUNÇÃO DE TELEPORTE INTELIGENTE
--- Carros: Aparece a +60 e faz uma "Queda Controlada" (deslizando reto) até +3.
+-- Carros: Aparece a +60 e desliza suavemente até +3.
 -- Bonecos: Queda normal de +60.
 -- =========================================================================
 local function SmartTeleport(targetPos, isDelivery)
@@ -86,18 +86,18 @@ local function SmartTeleport(targetPos, isDelivery)
             p.CFrame = delta * p.CFrame
         end
 
-        -- Espera um bocadinho para o mapa renderizar lá em baixo
-        task.wait(0.3)
+        -- Espera um pouco mais (0.5s) para garantir que o mapa lá em baixo renderiza
+        task.wait(0.5)
 
         -- 2. QUEDA CONTROLADA (Deslizando em linha reta para baixo)
-        -- Descemos o carro suavemente ao longo de 35 passos
-        local steps = 35
+        -- Aumentei para 60 frames (~1 segundo de queda) para a descida ser mais lenta e visível
+        local steps = 60
         local dropPerStep = fallDistance / steps
         for i = 1, steps do
             for _, p in pairs(partsToMove) do
                 p.CFrame = p.CFrame - Vector3.new(0, dropPerStep, 0)
             end
-            task.wait() -- Pausa de 1 frame para criar o efeito visual de deslize
+            task.wait() -- Pausa de 1 frame
         end
 
         -- 3. Descongela Física (agora vão pousar suavemente na plataforma)
@@ -108,7 +108,7 @@ local function SmartTeleport(targetPos, isDelivery)
             end
         end
         
-        -- A plataforma fica lá durante 10 segundos!
+        -- A plataforma fica lá durante 10 segundos
         task.spawn(function()
             task.wait(10)
             if plat then plat:Destroy() end
