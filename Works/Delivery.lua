@@ -32,7 +32,7 @@ UICorner.CornerRadius = UDim.new(0, 8)
 local title = Instance.new("TextLabel", logFrame)
 title.Size = UDim2.new(1, -100, 0, 30)
 title.BackgroundTransparency = 1
-title.Text = " 📜 Logs de Condução e Entrega"
+title.Text = " 📜 Logs de Condução Mobile"
 title.TextColor3 = Color3.fromRGB(255, 255, 255)
 title.Font = Enum.Font.GothamBold
 title.TextSize = 14
@@ -96,7 +96,32 @@ end)
 addLog("Sistema de Logs Iniciado!")
 
 -- =========================================================================
--- FUNÇÕES DE SUPORTE
+-- ESPIÃO DE INTERFACE MOBILE (UI SPY)
+-- =========================================================================
+local function monitorarBotao(obj)
+    if obj:IsA("GuiButton") or obj:IsA("ImageButton") or obj:IsA("TextButton") then
+        obj.InputBegan:Connect(function(input)
+            -- Filtra para registar apenas toques na tela do telemóvel ou cliques
+            if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then
+                local pai = obj.Parent and obj.Parent.Name or "N/A"
+                addLog("🕹️️ TOCOU NO BOTÃO: " .. obj.Name .. " (Pasta: " .. pai .. ")")
+            end
+        end)
+    end
+end
+
+-- Monitora todos os botões que já existem na tela
+for _, obj in pairs(lp.PlayerGui:GetDescendants()) do
+    monitorarBotao(obj)
+end
+
+-- Se o jogo criar o botão do acelerador SÓ quando entras no carro, isto apanha-o!
+lp.PlayerGui.DescendantAdded:Connect(function(obj)
+    monitorarBotao(obj)
+end)
+
+-- =========================================================================
+-- LOOP DA ENTREGA (SÓ COMO SUPORTE)
 -- =========================================================================
 local function rWait(min, max)
     task.wait(math.random(min * 10, max * 10) / 10)
@@ -112,179 +137,6 @@ local function fRem(n,...)
     end
 end
 
-local function getChar()
-    local c = lp.Character
-    return c, (c and c:FindFirstChild("HumanoidRootPart")), (c and c:FindFirstChild("Humanoid"))
-end
-
--- =========================================================================
--- NOVO: DETETOR UNIVERSAL DE CONDUÇÃO (LÊ O BANCO DO CARRO)
--- =========================================================================
-local currentSeat = nil
-local seatConnection = nil
-
-task.spawn(function()
-    while task.wait(0.5) do
-        local c, rt, hum = getChar()
-        if hum then
-            if hum.SeatPart ~= currentSeat then
-                currentSeat = hum.SeatPart
-                
-                -- Se conectou a um banco de carro
-                if currentSeat and currentSeat:IsA("VehicleSeat") then
-                    addLog("🚗 Conectado ao volante do carro!")
-                    
-                    if seatConnection then seatConnection:Disconnect() end
-                    
-                    -- Deteta sempre que a aceleração mudar (seja por toque, teclado ou comando)
-                    seatConnection = currentSeat:GetPropertyChangedSignal("Throttle"):Connect(function()
-                        local t = currentSeat.Throttle
-                        if t > 0 then
-                            addLog("▶️ ACELERANDO (Throttle: " .. tostring(t) .. ")")
-                        elseif t < 0 then
-                            addLog("🛑 FREANDO/RÉ (Throttle: " .. tostring(t) .. ")")
-                        else
-                            addLog("⏸️ PARADO (Throttle: 0)")
-                        end
-                    end)
-                elseif not currentSeat and seatConnection then
-                    seatConnection:Disconnect()
-                    seatConnection = nil
-                    addLog("Saiu do veículo.")
-                end
-            end
-        end
-    end
-end)
-
--- =========================================================================
--- FUNÇÃO DE TELEPORTE (INTACTA)
--- =========================================================================
-local function SmartTeleport(targetPos, isDelivery)
-    local c, rt, hum = getChar()
-    
-    local car = nil
-    if hum and hum.SeatPart then
-        local seatModel = hum.SeatPart:FindFirstAncestorWhichIsA("Model")
-        if seatModel and seatModel ~= c then
-            car = seatModel
-        end
-    end
-
-    if car then
-        local approachPos = targetPos + Vector3.new(60, 5, 0)
-        local finalPos = targetPos + Vector3.new(0, 5, 0)
-        
-        local currentPivot = car:GetPivot()
-        local destCFrame = CFrame.new(approachPos)
-        local delta = destCFrame * currentPivot:Inverse()
-
-        local modelsToMove = {car}
-        for _, obj in pairs(ws:GetChildren()) do
-            if obj:IsA("Model") and obj ~= car and obj ~= c then
-                if not obj:FindFirstChild("Humanoid") then
-                    local pPart = obj.PrimaryPart or obj:FindFirstChildWhichIsA("BasePart", true)
-                    if pPart and not pPart.Anchored then
-                        if (pPart.Position - currentPivot.Position).Magnitude <= 35 then
-                            table.insert(modelsToMove, obj)
-                        end
-                    end
-                end
-            end
-        end
-
-        local partsToMove = {}
-        for _, model in pairs(modelsToMove) do
-            for _, p in pairs(model:GetDescendants()) do
-                if p:IsA("BasePart") and not p.Anchored then
-                    table.insert(partsToMove, p)
-                end
-            end
-        end
-
-        local plat = Instance.new("Part")
-        plat.Size = Vector3.new(150, 5, 150)
-        plat.Position = targetPos - Vector3.new(0, 2.5, 0)
-        plat.Anchored = true
-        plat.Transparency = 1 
-        plat.Parent = ws
-
-        local estadosColisao = {}
-        for _, p in pairs(partsToMove) do
-            estadosColisao[p] = p.CanCollide
-            p.CanCollide = false
-            p.Anchored = true
-            p.Velocity = Vector3.zero
-            p.RotVelocity = Vector3.zero
-        end
-
-        for _, p in pairs(partsToMove) do
-            p.CFrame = delta * p.CFrame
-        end
-
-        task.wait(1)
-
-        local slideSteps = 20
-        local stepIn = (finalPos - approachPos) / slideSteps
-        for i = 1, slideSteps do
-            for _, p in pairs(partsToMove) do p.CFrame = p.CFrame + stepIn end
-            task.wait()
-        end
-
-        for _, p in pairs(partsToMove) do
-            if p and p.Parent then
-                p.Anchored = false
-                if estadosColisao[p] ~= nil then p.CanCollide = estadosColisao[p] end
-                p.Velocity = Vector3.zero
-                p.RotVelocity = Vector3.zero
-            end
-        end
-        
-        task.spawn(function()
-            task.wait(5)
-            if plat then plat:Destroy() end
-        end)
-    else
-        if rt and hum then
-            local outOffset = Vector3.new(30, 0, 0)
-            local approachPosCenter = targetPos + outOffset
-            
-            local rayOrigin = approachPosCenter + Vector3.new(0, 200, 0)
-            local rayDirection = Vector3.new(0, -400, 0)
-            local raycastParams = RaycastParams.new()
-            raycastParams.FilterDescendantsInstances = {c}
-            raycastParams.FilterType = Enum.RaycastFilterType.Exclude
-            
-            local rayResult = ws:Raycast(rayOrigin, rayDirection, raycastParams)
-            local startPos = approachPosCenter + Vector3.new(0, 10, 0)
-            if rayResult then
-                startPos = rayResult.Position + Vector3.new(0, 3, 0)
-            end
-            
-            rt.Velocity = Vector3.zero
-            rt.CFrame = CFrame.new(startPos)
-            
-            hum.PlatformStand = false
-            hum.Sit = false
-            hum:ChangeState(Enum.HumanoidStateType.Freefall) 
-            
-            task.wait(0.6)
-            hum:ChangeState(Enum.HumanoidStateType.Running)
-            
-            hum:MoveTo(targetPos)
-            local timeOut = 0
-            while timeOut < 4 do
-                local dist = (rt.Position * Vector3.new(1,0,1) - targetPos * Vector3.new(1,0,1)).Magnitude
-                if dist < 3.5 then break end
-                timeOut = timeOut + task.wait(0.1)
-            end
-        end
-    end
-end
-
--- =========================================================================
--- LOOP PRINCIPAL
--- =========================================================================
 getgenv().DeliveryLoop = task.spawn(function()
     while task.wait(0.5) do
         if not getgenv().AutoFarmDelivery then break end
@@ -300,33 +152,24 @@ getgenv().DeliveryLoop = task.spawn(function()
             end
             
             if pad then
-                SmartTeleport(pad.Parent.Position, false)
-                
                 rWait(1, 1.5)
                 fRem("RequestStartJobSession", "Delivery", "jobPad", mode)
                 rWait(1, 1.5)
                 fRem("AttemptDeliveryPickup")
                 rWait(7, 16)
                 getgenv().JobPhase = "Farming"
-            else
-                task.wait(2)
             end
             
         elseif getgenv().JobPhase == "Farming" then
             local t = ws:FindFirstChild("DeliveryTargetAnchor")
             if t and t.Parent == ws then
-                SmartTeleport(t.Position, true)
-                
                 for i = 1, 2 do
                     fRem("AttemptDeliveryComplete")
                     task.wait(0.5)
                 end
-                
                 rWait(1, 5)
                 fRem("AttemptDeliveryPickup")
                 rWait(7, 16)
-            else
-                task.wait(1)
             end
         end
     end
