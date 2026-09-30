@@ -97,7 +97,7 @@ copyBtn.MouseButton1Click:Connect(function()
     end
 end)
 
-logMsg("Interface Anti-Sleep carregada. Aguardando eventos...")
+logMsg("Interface Anti-Fling carregada. Aguardando eventos...")
 
 -- =========================================================================
 -- FUNÇÕES DE SUPORTE
@@ -142,7 +142,7 @@ local function simularBotao(nomeBotao, pressionar)
 end
 
 -- =========================================================================
--- FUNÇÃO DE TELEPORTE SMART
+-- FUNÇÃO DE TELEPORTE SMART COM FORCE-HOLD
 -- =========================================================================
 local function SmartTeleport(targetPos, isDelivery)
     logMsg("--- INICIANDO SMART TELEPORT ---")
@@ -175,7 +175,7 @@ local function SmartTeleport(targetPos, isDelivery)
             dir = (flatCurrent - flatTarget).Unit
         end
         
-        -- Margem +5 para as rodas
+        -- Margem Y+5 continua para garantir altura da roda
         local startPos = Vector3.new(targetPos.X + (dir.X * 80), targetPos.Y + 5, targetPos.Z + (dir.Z * 80))
         local lookAt = Vector3.new(targetPos.X, startPos.Y, targetPos.Z)
         local destCFrame = CFrame.new(startPos, lookAt)
@@ -184,30 +184,28 @@ local function SmartTeleport(targetPos, isDelivery)
         
         local estadosColisao = {}
         
-        logMsg("Aplicando Ghost Mode e anulando velocidades...")
+        logMsg("Aplicando Ghost Mode...")
         for _, p in pairs(allVehicleParts) do
             estadosColisao[p] = p.CanCollide
             local n = p.Name:lower()
             if not (n:match("wheel") or n:match("tire") or n:match("rim") or n:match("suspension") or n:match("whl")) then
                 p.CanCollide = false
             end
-            p.AssemblyLinearVelocity = Vector3.zero
-            p.AssemblyAngularVelocity = Vector3.zero
         end
         
-        logMsg("Executando PivotTo (Sem Anchored)...")
-        car:PivotTo(destCFrame)
-        
-        task.wait(0.2)
-        
-        logMsg("Forçando 'Awake' na física (Empurrão para baixo)...")
-        for _, p in pairs(allVehicleParts) do
-            -- Empurra de leve o carro para baixo para quebrar o Sleep Mode da engine
-            p.AssemblyLinearVelocity = Vector3.new(0, -10, 0)
-            p.AssemblyAngularVelocity = Vector3.zero
+        logMsg("Aplicando Force-Hold (Zerando inércia por 15 frames)...")
+        -- Este é o segredo: Prende o carro no local exato e zera a velocidade repetidamente
+        -- Isso obriga as suspensões a se adaptarem à nova posição sem arremessar o carro
+        for i = 1, 15 do
+            car:PivotTo(destCFrame)
+            for _, p in pairs(allVehicleParts) do
+                p.AssemblyLinearVelocity = Vector3.zero
+                p.AssemblyAngularVelocity = Vector3.zero
+            end
+            task.wait() -- Aguarda exatamente 1 frame do jogo
         end
         
-        logMsg("Física acordada. Iniciando condução...")
+        logMsg("Force-Hold concluído. Física estabilizada.")
         
         simularBotao("Left", false)
         simularBotao("Right", false)
