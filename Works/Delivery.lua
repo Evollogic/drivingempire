@@ -25,93 +25,87 @@ local function getChar()
 end
 
 -- =========================================================================
--- FUNÇÃO DE TELEPORTE INTELIGENTE
--- Carros: Vai a +60m congelado (carrega mapa) -> desce a +5m congelado -> Descongela e cai 5m perfeitamente.
--- Bonecos: Cai direto de +40m.
+-- FUNÇÃO DE TELEPORTE INTELIGENTE E RIGOROSO (Sem bugs de física)
 -- =========================================================================
-local function SmartTeleport(targetPos, isDelivery)
+local function SmartTeleport(targetPos)
     local c, rt, hum = getChar()
     local vFolder = ws:FindFirstChild("Vehicles")
     local car = vFolder and vFolder:FindFirstChild(lp.Name) or ws:FindFirstChild(lp.Name)
 
     if car then
+        -- Altura mínima de segurança (5 studs acima do chão)
+        local finalPos = targetPos + Vector3.new(0, 5, 0)
+        local destCFrame = CFrame.new(finalPos)
         local currentPivot = car:GetPivot()
-        local partsToMove = {}
-        local estados = {}
+        local delta = destCFrame * currentPivot:Inverse()
 
-        -- Captura Carro + Charrete (Raio de 35)
-        for _, p in pairs(ws:GetDescendants()) do
-            if p:IsA("BasePart") and not p.Anchored then
-                local dist = (p.Position - currentPivot.Position).Magnitude
-                if dist <= 35 then
-                    local model = p:FindFirstAncestorWhichIsA("Model")
-                    local isOther = false
-                    if model and model:FindFirstChild("Humanoid") and model ~= c then
-                        isOther = true
-                    end
-                    if not isOther then
-                        table.insert(partsToMove, p)
+        local modelsToMove = {car}
+        
+        -- FILTRO RIGOROSO: Procura a charrete apenas nos modelos próximos, ignora peças soltas/lixo
+        for _, obj in pairs(ws:GetChildren()) do
+            if obj:IsA("Model") and obj ~= car and obj ~= c then
+                if not obj:FindFirstChild("Humanoid") then -- Ignora outros jogadores
+                    local pPart = obj.PrimaryPart or obj:FindFirstChildWhichIsA("BasePart", true)
+                    if pPart and not pPart.Anchored then
+                        if (pPart.Position - currentPivot.Position).Magnitude <= 35 then
+                            table.insert(modelsToMove, obj)
+                        end
                     end
                 end
             end
         end
 
-        -- Cria plataforma plana gigante no chão para receber o carro
+        local partsToMove = {}
+        for _, model in pairs(modelsToMove) do
+            for _, p in pairs(model:GetDescendants()) do
+                if p:IsA("BasePart") and not p.Anchored then
+                    table.insert(partsToMove, p)
+                end
+            end
+        end
+
+        -- Cria plataforma exata no chão do alvo (Topo da plataforma = targetPos)
         local plat = Instance.new("Part")
-        plat.Size = Vector3.new(150, 4, 150)
-        plat.Position = targetPos - Vector3.new(0, 2, 0)
+        plat.Size = Vector3.new(150, 5, 150)
+        plat.Position = targetPos - Vector3.new(0, 2.5, 0)
         plat.Anchored = true
         plat.Transparency = 1 
         plat.Parent = ws
 
-        -- Congela Física
+        -- 1. Congela a física e para toda a inércia
         for _, p in pairs(partsToMove) do
-            estados[p] = p.Anchored
             p.Anchored = true
-            p.Velocity, p.RotVelocity = Vector3.zero, Vector3.zero
+            p.Velocity = Vector3.zero
+            p.RotVelocity = Vector3.zero
         end
 
-        -- PASSO 1: Vai para o céu (+60m) para carregar o mapa sem risco de colisão
-        local highPos = targetPos + Vector3.new(0, 60, 0)
-        local deltaHigh = CFrame.new(highPos) * currentPivot:Inverse()
+        -- 2. Teleporta tudo diretamente para +5 metros
         for _, p in pairs(partsToMove) do
-            p.CFrame = deltaHigh * p.CFrame
+            p.CFrame = delta * p.CFrame
         end
 
-        task.wait(0.5) -- Tempo para o Roblox processar e renderizar o chão lá em baixo
+        -- 3. Espera 0.5s para o mapa do jogo carregar em baixo de ti
+        task.wait(0.5)
 
-        -- PASSO 2: Desce congelado até mesmo acima da zona (+5m)
-        local lowPos = targetPos + Vector3.new(0, 5, 0)
-        local deltaLow = CFrame.new(lowPos) * CFrame.new(highPos):Inverse()
+        -- 4. Descongela e zera inércia DE NOVO (Isto evita o "chute" do servidor)
         for _, p in pairs(partsToMove) do
-            p.CFrame = deltaLow * p.CFrame
-        end
-
-        task.wait(0.1) -- Estabiliza antes da queda
-
-        -- PASSO 3: Solta a física (Queda mínima de 5 metros)! Aterra perfeito e ativa hitbox!
-        for p, state in pairs(estados) do
             if p and p.Parent then
-                p.Anchored = state
+                p.Anchored = false
                 p.Velocity = Vector3.zero
                 p.RotVelocity = Vector3.zero
             end
         end
         
-        -- A plataforma fica lá durante 10 segundos
+        -- Apaga plataforma ao fim de 3 segundos
         task.spawn(function()
-            task.wait(10)
+            task.wait(3)
             if plat then plat:Destroy() end
         end)
     else
-        -- REGRA PARA BONECO (Sem Carro) -> Cai de 40 metros
+        -- REGRA PARA BONECO (Vai a pé, cai de 5m apenas)
         if rt then
             rt.Velocity, rt.AssemblyLinearVelocity = Vector3.zero, Vector3.zero
-            if isDelivery then
-                rt.CFrame = CFrame.new(targetPos + Vector3.new(10, 40, 10))
-            else
-                rt.CFrame = CFrame.new(targetPos + Vector3.new(0, 40, 0))
-            end
+            rt.CFrame = CFrame.new(targetPos + Vector3.new(0, 5, 0))
         end
     end
 end
@@ -132,7 +126,7 @@ getgenv().DeliveryLoop=task.spawn(function()
             end
             
             if pad then
-                SmartTeleport(pad.Parent.Position, false)
+                SmartTeleport(pad.Parent.Position)
                 
                 rWait(1, 1.5)
                 fRem("RequestStartJobSession", "Delivery", "jobPad", mode)
@@ -147,7 +141,7 @@ getgenv().DeliveryLoop=task.spawn(function()
             local t = ws:FindFirstChild("DeliveryTargetAnchor")
             
             if t and t.Parent == ws then
-                SmartTeleport(t.Position, true)
+                SmartTeleport(t.Position)
                 
                 for i = 1, 2 do
                     fRem("AttemptDeliveryComplete")
