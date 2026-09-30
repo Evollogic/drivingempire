@@ -24,9 +24,6 @@ local function getChar()
     return c, (c and c:FindFirstChild("HumanoidRootPart")), (c and c:FindFirstChild("Humanoid"))
 end
 
--- =========================================================================
--- FUNÇÃO DE TELEPORTE (CARRO MODO FANTASMA / BONECO PATHFINDING CHÃO EXATO)
--- =========================================================================
 local function SmartTeleport(targetPos)
     local c, rt, hum = getChar()
     local vFolder = ws:FindFirstChild("Vehicles")
@@ -83,7 +80,7 @@ local function SmartTeleport(targetPos)
             p.CFrame = delta * p.CFrame
         end
 
-        task.wait(0.5)
+        task.wait(1) -- Tempo extra para carregar mapa do carro
 
         local slideSteps = 30
         local stepVec = (finalPos - approachPos) / slideSteps
@@ -111,74 +108,72 @@ local function SmartTeleport(targetPos)
             if plat then plat:Destroy() end
         end)
     else
-        -- =====================================================================
-        -- REGRA PARA BONECO (PATHFINDING VERDADEIRO COM RAYCAST NO CHÃO)
-        -- =====================================================================
         if rt and hum then
             rt.Velocity, rt.AssemblyLinearVelocity = Vector3.zero, Vector3.zero
             
-            -- 1. Usa um Laser (Raycast) para descobrir onde é o chão exato!
             local offsetHorizontal = targetPos + Vector3.new(30, 0, 0)
-            local rayOrigin = offsetHorizontal + Vector3.new(0, 200, 0) -- Começa muito alto
-            local rayDirection = Vector3.new(0, -400, 0) -- Aponta para baixo
+            local rayOrigin = offsetHorizontal + Vector3.new(0, 200, 0)
+            local rayDirection = Vector3.new(0, -400, 0)
             
             local raycastParams = RaycastParams.new()
-            raycastParams.FilterDescendantsInstances = {c} -- Ignora o próprio jogador
+            raycastParams.FilterDescendantsInstances = {c}
             raycastParams.FilterType = Enum.RaycastFilterType.Exclude
             
-            local rayResult = ws:Raycast(rayOrigin, rayDirection, raycastParams)
-            local spawnNoChao = offsetHorizontal + Vector3.new(0, 3, 0) -- fallback
+            -- FORÇA O BONECO A FICAR NO AR ENQUANTO O CHÃO NÃO CARREGA
+            rt.CFrame = CFrame.new(rayOrigin)
+            rt.Anchored = true
             
+            local rayResult = nil
+            local timeout = 5 -- Espera até 5 segundos o mapa renderizar
+            local startTime = tick()
+            
+            while tick() - startTime < timeout do
+                rayResult = ws:Raycast(rayOrigin, rayDirection, raycastParams)
+                if rayResult then break end
+                task.wait(0.2)
+            end
+            
+            local spawnNoChao = offsetHorizontal + Vector3.new(0, 5, 0)
             if rayResult then
-                -- O laser bateu no chão! Spawnar a 3 studs (altura da cintura) acima disso
                 spawnNoChao = rayResult.Position + Vector3.new(0, 3, 0)
             end
             
-            -- 2. Teleporta o boneco perfeitamente em pé no chão
             rt.CFrame = CFrame.new(spawnNoChao)
-            task.wait(0.2) -- Dá 0.2s para o jogo o registar no NavMesh
+            rt.Anchored = false -- Solta o boneco
+            task.wait(0.2)
             
-            -- 3. Cria e calcula o caminho até ao alvo
             local path = PathfindingService:CreatePath({
                 AgentRadius = 2,
                 AgentHeight = 5,
                 AgentCanJump = true
             })
             
-            local success, errorMessage = pcall(function()
+            local success, _ = pcall(function()
                 path:ComputeAsync(rt.Position, targetPos)
             end)
             
             if success and path.Status == Enum.PathStatus.Success then
                 local waypoints = path:GetWaypoints()
-                
                 for _, waypoint in ipairs(waypoints) do
                     if waypoint.Action == Enum.PathWaypointAction.Jump then
                         hum.Jump = true
                     end
-                    
-                    -- Pede ao boneco para andar para o waypoint
                     hum:MoveTo(waypoint.Position)
                     
-                    -- Mede a distância (ignora o Y para não bugar em subidas)
                     local timeOut = 0
                     while timeOut < 2 do
                         local dist = (rt.Position * Vector3.new(1,0,1) - waypoint.Position * Vector3.new(1,0,1)).Magnitude
-                        if dist < 2.5 then
-                            break -- Chegou ao ponto, passa para o próximo
-                        end
+                        if dist < 2.5 then break end
                         timeOut = timeOut + task.wait()
                     end
                 end
             else
-                -- Se não houver chão válido para calcular a rota, caminha em linha reta
                 hum:MoveTo(targetPos)
                 task.wait(2)
             end
         end
     end
 end
--- =========================================================================
 
 getgenv().DeliveryLoop=task.spawn(function()
     while task.wait(0.5) do
@@ -196,27 +191,22 @@ getgenv().DeliveryLoop=task.spawn(function()
             
             if pad then
                 SmartTeleport(pad.Parent.Position)
-                
                 rWait(1, 1.5)
                 fRem("RequestStartJobSession", "Delivery", "jobPad", mode)
                 rWait(1, 1.5)
                 fRem("AttemptDeliveryPickup")
-                
                 rWait(7, 16)
                 getgenv().JobPhase="Farming"
             end
             
         elseif getgenv().JobPhase=="Farming" then
             local t = ws:FindFirstChild("DeliveryTargetAnchor")
-            
             if t and t.Parent == ws then
                 SmartTeleport(t.Position)
-                
                 for i = 1, 2 do
                     fRem("AttemptDeliveryComplete")
                     task.wait(0.5)
                 end
-                
                 rWait(1, 5)
                 fRem("AttemptDeliveryPickup")
                 rWait(7, 16)
