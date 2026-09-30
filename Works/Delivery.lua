@@ -124,29 +124,17 @@ end
 local function SmartTeleport(targetPos, isDelivery)
     local c, rt, hum = getChar()
     
-    -- VERIFICAÇÃO RIGOROSA: Estou mesmo no carro?
+    -- VERIFICAÇÃO INFALÍVEL: O boneco está sentado?
     local car = nil
-    local vFolder = ws:FindFirstChild("Vehicles")
-    
-    if vFolder and vFolder:FindFirstChild(lp.Name) then
-        local foundCar = vFolder:FindFirstChild(lp.Name)
-        
-        -- Garante que não está a ler o próprio corpo
-        if foundCar ~= c then
-            -- Verifica se o jogador está perto do carro ou sentado nele
-            local distToCar = (foundCar:GetPivot().Position - c:GetPivot().Position).Magnitude
-            local isSittingInCar = hum and hum.SeatPart and hum.SeatPart:IsDescendantOf(foundCar)
-            
-            if distToCar < 25 or isSittingInCar then
-                car = foundCar
-            else
-                addLog("Carro ignorado (muito longe: " .. math.floor(distToCar) .. " studs).")
-            end
+    if hum and hum.SeatPart then
+        local seatModel = hum.SeatPart:FindFirstAncestorWhichIsA("Model")
+        if seatModel and seatModel ~= c then
+            car = seatModel
         end
     end
 
     if car then
-        addLog("Veículo detetado. Preparando teleporte de carro...")
+        addLog("Jogador sentado. Preparando teleporte de carro...")
         local approachPos = targetPos + Vector3.new(60, 5, 0)
         local finalPos = targetPos + Vector3.new(0, 5, 0)
         
