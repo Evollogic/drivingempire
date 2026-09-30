@@ -97,7 +97,7 @@ copyBtn.MouseButton1Click:Connect(function()
     end
 end)
 
-logMsg("Interface carregada. Aguardando eventos...")
+logMsg("Interface Anti-Sleep carregada. Aguardando eventos...")
 
 -- =========================================================================
 -- FUNÇÕES DE SUPORTE
@@ -175,7 +175,7 @@ local function SmartTeleport(targetPos, isDelivery)
             dir = (flatCurrent - flatTarget).Unit
         end
         
-        -- Adicionado +5 de margem para as rodas não nascerem dentro do asfalto
+        -- Margem +5 para as rodas
         local startPos = Vector3.new(targetPos.X + (dir.X * 80), targetPos.Y + 5, targetPos.Z + (dir.Z * 80))
         local lookAt = Vector3.new(targetPos.X, startPos.Y, targetPos.Z)
         local destCFrame = CFrame.new(startPos, lookAt)
@@ -188,7 +188,6 @@ local function SmartTeleport(targetPos, isDelivery)
         for _, p in pairs(allVehicleParts) do
             estadosColisao[p] = p.CanCollide
             local n = p.Name:lower()
-            -- Proteção expandida para rodas
             if not (n:match("wheel") or n:match("tire") or n:match("rim") or n:match("suspension") or n:match("whl")) then
                 p.CanCollide = false
             end
@@ -199,16 +198,16 @@ local function SmartTeleport(targetPos, isDelivery)
         logMsg("Executando PivotTo (Sem Anchored)...")
         car:PivotTo(destCFrame)
         
-        -- Pausa mínima para o servidor registrar o teleporte antes de ligar o motor
         task.wait(0.2)
         
-        -- Mata qualquer inércia residual após o teleporte
+        logMsg("Forçando 'Awake' na física (Empurrão para baixo)...")
         for _, p in pairs(allVehicleParts) do
-            p.AssemblyLinearVelocity = Vector3.zero
+            -- Empurra de leve o carro para baixo para quebrar o Sleep Mode da engine
+            p.AssemblyLinearVelocity = Vector3.new(0, -10, 0)
             p.AssemblyAngularVelocity = Vector3.zero
         end
         
-        logMsg("Física estável. Iniciando condução...")
+        logMsg("Física acordada. Iniciando condução...")
         
         simularBotao("Left", false)
         simularBotao("Right", false)
