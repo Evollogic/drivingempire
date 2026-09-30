@@ -5,7 +5,7 @@ local ts = game:GetService("TweenService")
 local http = game:GetService("HttpService")
 local lp = plyrs.LocalPlayer
 
-local CURRENT_VERSION = "2.8"
+local CURRENT_VERSION = "2.9"
 local VERSION_URL = "https://raw.githubusercontent.com/Evollogic/drivingempire/main/version.txt"
 local SCRIPT_URL = "https://raw.githubusercontent.com/Evollogic/drivingempire/main/Hub.lua"
 
@@ -62,7 +62,6 @@ mainFrame.Position = UDim2.new(0.5, -110, 0.5, -190)
 mainFrame.BackgroundColor3 = Color3.fromRGB(10, 10, 15)
 mainFrame.BackgroundTransparency = 0.15
 mainFrame.BorderSizePixel = 0
-mainFrame.Active = true
 mainFrame.Visible = false
 mainFrame.Parent = sg
 
@@ -124,7 +123,10 @@ minBtn.Font = Enum.Font.GothamBold
 minBtn.TextSize = 14
 Instance.new("UICorner", minBtn).CornerRadius = UDim.new(0, 6)
 
-minBtn.MouseButton1Click:Connect(function() mainFrame.Visible = false; openBall.Visible = true end)
+minBtn.MouseButton1Click:Connect(function() 
+    mainFrame.Visible = false
+    openBall.Visible = true 
+end)
 
 -- ABAS
 local tabContainer = Instance.new("Frame", mainFrame)
@@ -250,84 +252,69 @@ deliveryToggleBtn.MouseButton1Click:Connect(function()
 end)
 if getgenv().AutoFarmDelivery then task.spawn(function() if not lp.Character then lp.CharacterAdded:Wait() end task.wait(1) updateDeliveryUI() end) end
 
--- SISTEMA DE ARRASTAR (Painel Principal)
-local dragging = false
-local dragInput, dragStart, startPos
-
-local function updateInput(input)
-    local delta = input.Position - dragStart
-    mainFrame.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
-end
-
-local function setupDraggable(guiObject, moveObject)
-    guiObject.InputBegan:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-            dragging = true
-            dragStart = input.Position
-            startPos = moveObject.Position
-
-            local endConn
-            endConn = input.Changed:Connect(function()
-                if input.UserInputState == Enum.UserInputState.End then
-                    dragging = false
-                    endConn:Disconnect()
-                end
-            end)
-        end
-    end)
-
-    guiObject.InputChanged:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
-            dragInput = input
-        end
-    end)
-end
-
-setupDraggable(mainFrame, mainFrame)
-setupDraggable(topBar, mainFrame)
-
--- SISTEMA HÍBRIDO (ARRASTAR + CLIQUE) PARA A BOLINHA
+-- ==========================================
+-- SISTEMA ABSOLUTO DE ARRASTO E CLIQUE
+-- ==========================================
 local ballDragging = false
-local ballDragInput, ballDragStart, ballStartPos
-local dragDistance = 0
+local ballDragStart = nil
+local ballStartPos = nil
 
+local hubDragging = false
+local hubDragStart = nil
+local hubStartPos = nil
+
+-- INICIAR ARRASTO DA BOLINHA
 openBall.InputBegan:Connect(function(input)
     if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
         ballDragging = true
-        dragDistance = 0
         ballDragStart = input.Position
         ballStartPos = openBall.Position
-        
-        local endConn
-        endConn = input.Changed:Connect(function()
-            if input.UserInputState == Enum.UserInputState.End then
-                ballDragging = false
-                endConn:Disconnect()
-                
-                -- Se a distância arrastada for quase nula, aciona como clique!
-                if dragDistance < 5 then
-                    mainFrame.Visible = true
-                    openBall.Visible = false
-                end
-            end
-        end)
     end
 end)
 
-openBall.InputChanged:Connect(function(input)
-    if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
-        ballDragInput = input
+-- INICIAR ARRASTO DO HUB (Barra superior ou fundo limpo)
+local function onHubInputBegan(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+        hubDragging = true
+        hubDragStart = input.Position
+        hubStartPos = mainFrame.Position
     end
-end)
+end
+topBar.InputBegan:Connect(onHubInputBegan)
+mainFrame.InputBegan:Connect(onHubInputBegan)
 
+-- MOVER (Lido globalmente na ecrã para evitar falhas)
 uis.InputChanged:Connect(function(input)
-    if input == dragInput and dragging then
-        updateInput(input)
+    if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
+        if ballDragging then
+            local delta = input.Position - ballDragStart
+            openBall.Position = UDim2.new(ballStartPos.X.Scale, ballStartPos.X.Offset + delta.X, ballStartPos.Y.Scale, ballStartPos.Y.Offset + delta.Y)
+        end
+        if hubDragging then
+            local delta = input.Position - hubDragStart
+            mainFrame.Position = UDim2.new(hubStartPos.X.Scale, hubStartPos.X.Offset + delta.X, hubStartPos.Y.Scale, hubStartPos.Y.Offset + delta.Y)
+        end
     end
-    if input == ballDragInput and ballDragging then
-        local delta = input.Position - ballDragStart
-        dragDistance = delta.Magnitude -- Mede o arrasto total
-        openBall.Position = UDim2.new(ballStartPos.X.Scale, ballStartPos.X.Offset + delta.X, ballStartPos.Y.Scale, ballStartPos.Y.Offset + delta.Y)
+end)
+
+-- SOLTAR E VALIDAR CLIQUE
+uis.InputEnded:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+        -- Se soltou a bolinha
+        if ballDragging then
+            ballDragging = false
+            local delta = input.Position - ballDragStart
+            -- Se mexeu menos de 5 pixeis, é CLIQUE! Abre o painel.
+            if delta.Magnitude < 5 then
+                mainFrame.Visible = true
+                openBall.Visible = false
+            end
+        end
+        
+        -- Se soltou o hub
+        if hubDragging then
+            hubDragging = false
+        end
     end
 end)
 
