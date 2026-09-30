@@ -4,7 +4,7 @@ local remotes=rs:WaitForChild("Remotes")
 if getgenv().DeliveryLoop then pcall(task.cancel,getgenv().DeliveryLoop) end
 getgenv().AutoFarmDelivery,getgenv().JobPhase=true,"Init"
 
--- Função de Randomização para evitar Anti-Cheat (ex: 7.4s, 14.2s, 3.1s)
+-- Função de Randomização
 local function rWait(min, max)
     task.wait(math.random(min * 10, max * 10) / 10)
 end
@@ -25,23 +25,27 @@ local function getChar()
 end
 
 -- =========================================================================
--- FUNÇÃO DE TELEPORTE INTELIGENTE (CARRO + CHARRETE ou APENAS BONECO)
+-- FUNÇÃO DE TELEPORTE INTELIGENTE
+-- Apenas CARROS deslizam e caem perto do chão (+4). 
+-- BONECOS a pé continuam com a queda antiga de +50 metros.
 -- =========================================================================
-local function SmartTeleport(targetPos)
+local function SmartTeleport(targetPos, isDelivery)
     local c, rt, hum = getChar()
     local vFolder = ws:FindFirstChild("Vehicles")
     local car = vFolder and vFolder:FindFirstChild(lp.Name) or ws:FindFirstChild(lp.Name)
 
     if car then
-        -- TEM CARRO: Aplica as Regras do Raio Curto e Plataforma Anti-Void
-        local destCFrame = CFrame.new(targetPos)
+        -- REGRA APENAS PARA CARRO (Mais perto do chão e deslizando)
+        local finalPos = targetPos + Vector3.new(0, 4, 0)
+        local approachPos = isDelivery and (finalPos + Vector3.new(50, 0, 0)) or finalPos
+        
+        local destCFrame = CFrame.new(approachPos)
         local currentPivot = car:GetPivot()
         local delta = destCFrame * currentPivot:Inverse()
 
         local partsToMove = {}
         local estados = {}
 
-        -- Raio Curto (35 studs) de CAPTURA (O teleporte viaja para o mapa todo)
         for _, p in pairs(ws:GetDescendants()) do
             if p:IsA("BasePart") and not p.Anchored then
                 local dist = (p.Position - currentPivot.Position).Magnitude
@@ -58,30 +62,33 @@ local function SmartTeleport(targetPos)
             end
         end
 
-        -- Cria plataforma de segurança (totalmente invisível para o farm)
         local plat = Instance.new("Part")
         plat.Size = Vector3.new(300, 10, 300)
-        plat.Position = targetPos - Vector3.new(0, 10, 0)
+        plat.Position = approachPos - Vector3.new(0, 7, 0)
         plat.Anchored = true
         plat.Transparency = 1 
         plat.Parent = ws
 
-        -- Congela Física
         for _, p in pairs(partsToMove) do
             estados[p] = p.Anchored
             p.Anchored = true
             p.Velocity, p.RotVelocity = Vector3.zero, Vector3.zero
         end
 
-        -- Teleporta Tudo Junto
         for _, p in pairs(partsToMove) do
             p.CFrame = delta * p.CFrame
         end
 
-        -- TEMPO DE CÉU BEM BAIXO (0.25 segundos para o mapa renderizar)
-        task.wait(0.25)
+        task.wait(0.3)
 
-        -- Descongela Física
+        if isDelivery then
+            local finalDelta = CFrame.new(finalPos) * CFrame.new(approachPos):Inverse()
+            for _, p in pairs(partsToMove) do
+                p.CFrame = finalDelta * p.CFrame
+            end
+            task.wait(0.1)
+        end
+
         for p, state in pairs(estados) do
             if p and p.Parent then
                 p.Anchored = state
@@ -89,16 +96,21 @@ local function SmartTeleport(targetPos)
             end
         end
         
-        -- Apaga plataforma limpadamente após o carro assentar
         task.spawn(function()
             task.wait(0.5)
             if plat then plat:Destroy() end
         end)
     else
-        -- SEM CARRO: Regra antiga, teleporta só o boneco
+        -- REGRA PARA BONECO (Sem Carro) -> Mantém o teu script original de queda alta
         if rt then
             rt.Velocity, rt.AssemblyLinearVelocity = Vector3.zero, Vector3.zero
-            rt.CFrame = CFrame.new(targetPos)
+            if isDelivery then
+                -- Cai 50m acima e ligeiramente de lado
+                rt.CFrame = CFrame.new(targetPos + Vector3.new(10, 50, 10))
+            else
+                -- Cai reto 50m acima (no Job Pad)
+                rt.CFrame = CFrame.new(targetPos + Vector3.new(0, 50, 0))
+            end
         end
     end
 end
@@ -119,15 +131,14 @@ getgenv().DeliveryLoop=task.spawn(function()
             end
             
             if pad then
-                -- Teleporta com offset de +15 para cima (reduzido de 50 para evitar capotamento)
-                SmartTeleport(pad.Parent.Position + Vector3.new(0, 15, 0))
+                -- false = não precisa "deslizar" (só apanhar trabalho)
+                SmartTeleport(pad.Parent.Position, false)
                 
                 rWait(1, 1.5)
                 fRem("RequestStartJobSession", "Delivery", "jobPad", mode)
                 rWait(1, 1.5)
                 fRem("AttemptDeliveryPickup")
                 
-                -- Coleta inicial aleatória (7 a 16 segundos)
                 rWait(7, 16)
                 getgenv().JobPhase="Farming"
             end
@@ -136,22 +147,16 @@ getgenv().DeliveryLoop=task.spawn(function()
             local t = ws:FindFirstChild("DeliveryTargetAnchor")
             
             if t and t.Parent == ws then
-                -- Vai para o DeliveryTargetAnchor (usando +15 no eixo Y)
-                SmartTeleport(t.Position + Vector3.new(10, 15, 10))
+                -- true = avisa a função que isto é a zona de entrega (desliza o carro se estiver a usar um)
+                SmartTeleport(t.Position, true)
                 
-                -- Fica forçando a entrega
                 for i = 1, 2 do
                     fRem("AttemptDeliveryComplete")
                     task.wait(0.5)
                 end
                 
-                -- Entrega aleatória (1 a 5 segundos)
                 rWait(1, 5)
-
-                -- Pede a próxima caixa de longe
                 fRem("AttemptDeliveryPickup")
-
-                -- Coleta da próxima caixa aleatória (7 a 16 segundos)
                 rWait(7, 16)
             end
         end
