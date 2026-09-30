@@ -1,6 +1,5 @@
 local ws,rs,lp=game:GetService("Workspace"),game:GetService("ReplicatedStorage"),game:GetService("Players").LocalPlayer
 local remotes=rs:WaitForChild("Remotes")
-local PathfindingService = game:GetService("PathfindingService")
 
 if getgenv().DeliveryLoop then pcall(task.cancel,getgenv().DeliveryLoop) end
 getgenv().AutoFarmDelivery,getgenv().JobPhase=true,"Init"
@@ -25,7 +24,7 @@ local function getChar()
 end
 
 -- =========================================================================
--- FUNÇÃO DE TELEPORTE (ANIMAÇÃO CORRIGIDA + REGRA DAS 3 VEZES)
+-- FUNÇÃO DE TELEPORTE (CORREÇÃO DA STATE MACHINE DO HUMANOID)
 -- =========================================================================
 local function SmartTeleport(targetPos, isDelivery)
     local c, rt, hum = getChar()
@@ -33,7 +32,7 @@ local function SmartTeleport(targetPos, isDelivery)
     local car = vFolder and vFolder:FindFirstChild(lp.Name) or ws:FindFirstChild(lp.Name)
 
     if car then
-        -- REGRAS DO CARRO
+        -- REGRAS DO CARRO MANTIDAS
         local approachPos = targetPos + Vector3.new(60, 5, 0)
         local finalPos = targetPos + Vector3.new(0, 5, 0)
         
@@ -87,11 +86,8 @@ local function SmartTeleport(targetPos, isDelivery)
         task.wait(1)
 
         local slideSteps = 20
-        
         if isDelivery then
-            -- ENTRA E SAI 3 VEZES DE CARRO
             for vez = 1, 3 do
-                -- Desliza para DENTRO
                 local stepIn = (finalPos - approachPos) / slideSteps
                 for i = 1, slideSteps do
                     for _, p in pairs(partsToMove) do p.CFrame = p.CFrame + stepIn end
@@ -99,7 +95,6 @@ local function SmartTeleport(targetPos, isDelivery)
                 end
                 task.wait(0.3)
                 
-                -- Desliza para FORA (exceto na última vez)
                 if vez < 3 then
                     local stepOut = (approachPos - finalPos) / slideSteps
                     for i = 1, slideSteps do
@@ -110,7 +105,6 @@ local function SmartTeleport(targetPos, isDelivery)
                 end
             end
         else
-            -- SE NÃO FOR ENTREGA, ENTRA SÓ 1 VEZ
             local stepIn = (finalPos - approachPos) / slideSteps
             for i = 1, slideSteps do
                 for _, p in pairs(partsToMove) do p.CFrame = p.CFrame + stepIn end
@@ -133,10 +127,9 @@ local function SmartTeleport(targetPos, isDelivery)
         end)
     else
         -- =====================================================================
-        -- REGRAS DO BONECO (A PÉ)
+        -- REGRAS DO BONECO (STATE MACHINE FIX & WALK)
         -- =====================================================================
         if rt and hum then
-            -- Descobre o chão antes de teleportar para NÃO congelar o boneco
             local outOffset = Vector3.new(30, 0, 0)
             local approachPosCenter = targetPos + outOffset
             
@@ -147,57 +140,48 @@ local function SmartTeleport(targetPos, isDelivery)
             raycastParams.FilterType = Enum.RaycastFilterType.Exclude
             
             local rayResult = ws:Raycast(rayOrigin, rayDirection, raycastParams)
-            local startPos = approachPosCenter + Vector3.new(0, 4, 0)
+            -- Mete 5 studs acima para garantir que ele "cai" no chão
+            local startPos = approachPosCenter + Vector3.new(0, 10, 0)
             if rayResult then
-                startPos = rayResult.Position + Vector3.new(0, 3, 0)
+                startPos = rayResult.Position + Vector3.new(0, 5, 0)
             end
             
-            -- Teleporta o boneco solto
+            -- 1. Teleporta e para a velocidade
             rt.Velocity = Vector3.zero
             rt.CFrame = CFrame.new(startPos)
-            task.wait(0.3)
             
-            -- O SEGREDO: Força um pequeno salto para acordar o script de animação do Roblox
-            hum.Jump = true
-            task.wait(0.2)
+            -- 2. RESET DO ESTADO DO HUMANOID
+            hum.PlatformStand = false
+            hum.Sit = false
+            hum:ChangeState(Enum.HumanoidStateType.Freefall) -- Diz ao jogo que está a cair
             
-            -- Função para andar até um ponto usando Pathfinding
+            -- 3. Espera o boneco bater no chão de verdade
+            task.wait(0.6)
+            
+            -- 4. FORÇA O ESTADO DE CORRIDA! Isto liga a animação das pernas.
+            hum:ChangeState(Enum.HumanoidStateType.Running)
+            
             local function ForceWalk(destination)
-                local path = PathfindingService:CreatePath({AgentRadius = 2, AgentHeight = 5, AgentCanJump = true})
-                pcall(function() path:ComputeAsync(rt.Position, destination) end)
-                
-                if path.Status == Enum.PathStatus.Success then
-                    local waypoints = path:GetWaypoints()
-                    for _, waypoint in ipairs(waypoints) do
-                        if waypoint.Action == Enum.PathWaypointAction.Jump then hum.Jump = true end
-                        hum:MoveTo(waypoint.Position)
-                        
-                        local timeOut = 0
-                        while timeOut < 2 do
-                            local dist = (rt.Position * Vector3.new(1,0,1) - waypoint.Position * Vector3.new(1,0,1)).Magnitude
-                            if dist < 2.5 then break end
-                            timeOut = timeOut + task.wait()
-                        end
-                    end
-                else
-                    hum:MoveTo(destination)
-                    task.wait(1.5)
+                hum:MoveTo(destination)
+                local timeOut = 0
+                while timeOut < 4 do -- Espera até 4 segundos para chegar
+                    local dist = (rt.Position * Vector3.new(1,0,1) - destination * Vector3.new(1,0,1)).Magnitude
+                    if dist < 3.5 then break end
+                    timeOut = timeOut + task.wait(0.1)
                 end
             end
             
             if isDelivery then
-                -- A DANÇA DAS 3 VEZES PARA O BONECO
                 for vez = 1, 3 do
-                    ForceWalk(targetPos) -- Anda para o centro da zona
+                    ForceWalk(targetPos)
                     task.wait(0.3)
                     
                     if vez < 3 then
-                        ForceWalk(startPos) -- Anda de volta para fora
+                        ForceWalk(startPos)
                         task.wait(0.3)
                     end
                 end
             else
-                -- Apenas anda para apanhar o serviço
                 ForceWalk(targetPos)
             end
         end
