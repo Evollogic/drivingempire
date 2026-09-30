@@ -26,8 +26,8 @@ end
 
 -- =========================================================================
 -- FUNÇÃO DE TELEPORTE INTELIGENTE
--- Apenas CARROS deslizam e caem perto do chão (+4). 
--- BONECOS a pé continuam com a queda antiga de +50 metros.
+-- Carros: Teleporte baixo (+3) em cima de uma plataforma plana que dura 10s.
+-- Bonecos: Queda normal (+50).
 -- =========================================================================
 local function SmartTeleport(targetPos, isDelivery)
     local c, rt, hum = getChar()
@@ -35,11 +35,10 @@ local function SmartTeleport(targetPos, isDelivery)
     local car = vFolder and vFolder:FindFirstChild(lp.Name) or ws:FindFirstChild(lp.Name)
 
     if car then
-        -- REGRA APENAS PARA CARRO (Mais perto do chão e deslizando)
-        local finalPos = targetPos + Vector3.new(0, 4, 0)
-        local approachPos = isDelivery and (finalPos + Vector3.new(50, 0, 0)) or finalPos
+        -- FINAL POS: Muito perto do chão
+        local finalPos = targetPos + Vector3.new(0, 3, 0)
         
-        local destCFrame = CFrame.new(approachPos)
+        local destCFrame = CFrame.new(finalPos)
         local currentPivot = car:GetPivot()
         local delta = destCFrame * currentPivot:Inverse()
 
@@ -62,33 +61,30 @@ local function SmartTeleport(targetPos, isDelivery)
             end
         end
 
+        -- Cria plataforma plana gigante para evitar o relevo do mapa
         local plat = Instance.new("Part")
-        plat.Size = Vector3.new(300, 10, 300)
-        plat.Position = approachPos - Vector3.new(0, 7, 0)
+        plat.Size = Vector3.new(150, 4, 150)
+        plat.Position = targetPos - Vector3.new(0, 2, 0) -- Fica exatamente sob os pneus
         plat.Anchored = true
         plat.Transparency = 1 
         plat.Parent = ws
 
+        -- Congela Física
         for _, p in pairs(partsToMove) do
             estados[p] = p.Anchored
             p.Anchored = true
             p.Velocity, p.RotVelocity = Vector3.zero, Vector3.zero
         end
 
+        -- Teleporta tudo (Carro + Charrete) para cima da plataforma
         for _, p in pairs(partsToMove) do
             p.CFrame = delta * p.CFrame
         end
 
+        -- Tempo rápido para carregar o mapa (0.3s)
         task.wait(0.3)
 
-        if isDelivery then
-            local finalDelta = CFrame.new(finalPos) * CFrame.new(approachPos):Inverse()
-            for _, p in pairs(partsToMove) do
-                p.CFrame = finalDelta * p.CFrame
-            end
-            task.wait(0.1)
-        end
-
+        -- Descongela Física (agora vão pousar suavemente na plataforma invisível)
         for p, state in pairs(estados) do
             if p and p.Parent then
                 p.Anchored = state
@@ -96,19 +92,19 @@ local function SmartTeleport(targetPos, isDelivery)
             end
         end
         
+        -- O SEGREDO: A plataforma fica lá durante 10 segundos!
+        -- Assim o carro fica 100% parado sem rolar com o relevo durante a entrega.
         task.spawn(function()
-            task.wait(0.5)
+            task.wait(10)
             if plat then plat:Destroy() end
         end)
     else
-        -- REGRA PARA BONECO (Sem Carro) -> Mantém o teu script original de queda alta
+        -- REGRA PARA BONECO (Sem Carro)
         if rt then
             rt.Velocity, rt.AssemblyLinearVelocity = Vector3.zero, Vector3.zero
             if isDelivery then
-                -- Cai 50m acima e ligeiramente de lado
                 rt.CFrame = CFrame.new(targetPos + Vector3.new(10, 50, 10))
             else
-                -- Cai reto 50m acima (no Job Pad)
                 rt.CFrame = CFrame.new(targetPos + Vector3.new(0, 50, 0))
             end
         end
@@ -131,7 +127,6 @@ getgenv().DeliveryLoop=task.spawn(function()
             end
             
             if pad then
-                -- false = não precisa "deslizar" (só apanhar trabalho)
                 SmartTeleport(pad.Parent.Position, false)
                 
                 rWait(1, 1.5)
@@ -147,7 +142,6 @@ getgenv().DeliveryLoop=task.spawn(function()
             local t = ws:FindFirstChild("DeliveryTargetAnchor")
             
             if t and t.Parent == ws then
-                -- true = avisa a função que isto é a zona de entrega (desliza o carro se estiver a usar um)
                 SmartTeleport(t.Position, true)
                 
                 for i = 1, 2 do
