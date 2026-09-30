@@ -49,7 +49,7 @@ local function simularBotao(nomeBotao, pressionar)
 end
 
 -- =========================================================================
--- FUNÇÃO DE TELEPORTE HÍBRIDA (CARRO E A PÉ)
+-- FUNÇÃO DE TELEPORTE HÍBRIDA (CARRO FÍSICO E A PÉ)
 -- =========================================================================
 local function SmartTeleport(targetPos, isDelivery)
     local c, rt, hum = getChar()
@@ -63,75 +63,84 @@ local function SmartTeleport(targetPos, isDelivery)
     end
 
     if car then
-        -- REGRAS DO CARRO
-        local approachPos = targetPos + Vector3.new(100, 5, 0)
-        local finalPos = targetPos + Vector3.new(0, 5, 0)
-        
-        local lookAt = Vector3.new(finalPos.X, approachPos.Y, finalPos.Z)
-        local destCFrame = CFrame.new(approachPos, lookAt)
+        -- ==========================================
+        -- REGRAS DO CARRO (FÍSICA REAL NO CHÃO)
+        -- ==========================================
         local currentPivot = car:GetPivot()
+        
+        -- Descobre a direção ideal baseada de onde tu vens para evitar teleporte dentro de prédios
+        local flatCurrent = Vector3.new(currentPivot.Position.X, 0, currentPivot.Position.Z)
+        local flatTarget = Vector3.new(targetPos.X, 0, targetPos.Z)
+        local dir = Vector3.new(1, 0, 0)
+        if (flatCurrent - flatTarget).Magnitude > 1 then
+            dir = (flatCurrent - flatTarget).Unit
+        end
+        
+        local approachPosCenter = targetPos + (dir * 90) -- 90 metros de distância
+        
+        -- Usa Raycast para colar o carro ao chão real!
+        local rayOrigin = approachPosCenter + Vector3.new(0, 300, 0)
+        local raycastParams = RaycastParams.new()
+        raycastParams.FilterDescendantsInstances = {c, car} 
+        raycastParams.FilterType = Enum.RaycastFilterType.Exclude
+        
+        local rayResult = ws:Raycast(rayOrigin, Vector3.new(0, -600, 0), raycastParams)
+        local startPos = approachPosCenter + Vector3.new(0, 10, 0)
+        if rayResult then 
+            startPos = rayResult.Position + Vector3.new(0, 4, 0) -- Colado ao chão
+        end
+        
+        local lookAt = Vector3.new(targetPos.X, startPos.Y, targetPos.Z)
+        local destCFrame = CFrame.new(startPos, lookAt)
         local delta = destCFrame * currentPivot:Inverse()
 
-        local modelsToMove = {car}
-        for _, obj in pairs(ws:GetChildren()) do
-            if obj:IsA("Model") and obj ~= car and obj ~= c and not obj:FindFirstChild("Humanoid") then
-                local pPart = obj.PrimaryPart or obj:FindFirstChildWhichIsA("BasePart", true)
-                if pPart and not pPart.Anchored and (pPart.Position - currentPivot.Position).Magnitude <= 35 then
-                    table.insert(modelsToMove, obj)
-                end
-            end
-        end
-
+        -- Captura TODAS as peças num raio GIGANTE (100 studs) para apanhar a charrete/vagão
         local partsToMove = {}
-        for _, model in pairs(modelsToMove) do
-            for _, p in pairs(model:GetDescendants()) do
-                if p:IsA("BasePart") and not p.Anchored then
+        local processed = {}
+        local partsInRadius = ws:GetPartBoundsInRadius(currentPivot.Position, 100)
+        
+        for _, p in pairs(partsInRadius) do
+            if p:IsA("BasePart") and not p.Anchored then
+                local model = p:FindFirstAncestorWhichIsA("Model")
+                if model and model:FindFirstChild("Humanoid") and model ~= c then
+                    continue -- Ignora outros jogadores
+                end
+                if not processed[p] then
                     table.insert(partsToMove, p)
+                    processed[p] = true
                 end
             end
         end
 
-        local plat = Instance.new("Part", ws)
-        plat.Size, plat.Position, plat.Anchored, plat.Transparency = Vector3.new(150, 5, 150), targetPos - Vector3.new(0, 2.5, 0), true, 1 
-
-        local estadosColisao = {}
-        for _, p in pairs(partsToMove) do
-            estadosColisao[p] = p.CanCollide
-            p.CanCollide = false
-            p.Anchored = true
+        -- Teleporta tudo instantaneamente para o chão
+        for _, p in pairs(partsToMove) do 
             p.Velocity, p.RotVelocity = Vector3.zero, Vector3.zero
+            p.CFrame = delta * p.CFrame 
         end
 
-        for _, p in pairs(partsToMove) do p.CFrame = delta * p.CFrame end
+        -- Espera o carro e a charrete assentarem na gravidade
+        task.wait(1.5)
 
-        task.wait(1)
-
-        -- Simula Condução
+        -- Simula Condução Real (deixa o motor atuar para sofrer o relevo)
         simularBotao("Throttle", true)
         
-        local frames = 150
-        local stepVec = (finalPos - approachPos) / frames
-        for i = 1, frames do
-            for _, p in pairs(partsToMove) do p.CFrame = p.CFrame + stepVec end
-            task.wait()
+        -- Monitoriza a viagem física até chegar ao destino
+        local timeOut = 0
+        while timeOut < 6 do
+            local dist = (car:GetPivot().Position * Vector3.new(1,0,1) - targetPos * Vector3.new(1,0,1)).Magnitude
+            if dist < 20 then break end
+            timeOut = timeOut + task.wait(0.1)
         end
 
+        -- Chegou à meta: Trava!
         simularBotao("Throttle", false)
         simularBotao("Brake", true)
-        task.wait(0.5)
+        task.wait(1)
         simularBotao("Brake", false)
-
-        for _, p in pairs(partsToMove) do
-            if p and p.Parent then
-                p.Anchored = false
-                if estadosColisao[p] ~= nil then p.CanCollide = estadosColisao[p] end
-                p.Velocity, p.RotVelocity = Vector3.zero, Vector3.zero
-            end
-        end
-        
-        task.spawn(function() task.wait(5) if plat then plat:Destroy() end end)
     else
-        -- REGRAS A PÉ
+        -- ==========================================
+        -- REGRAS A PÉ (INTACTAS)
+        -- ==========================================
         if rt and hum then
             local outOffset = Vector3.new(30, 0, 0)
             local approachPosCenter = targetPos + outOffset
