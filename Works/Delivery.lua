@@ -26,8 +26,8 @@ end
 
 -- =========================================================================
 -- FUNÇÃO DE TELEPORTE INTELIGENTE
--- Carros: Teleporta a +80m, SOLTA A FÍSICA e cai em queda livre natural.
--- O jogo regista a entrada na zona porque o carro cai "vivo" (sem âncora).
+-- Carros: Vai a +60m congelado (carrega mapa) -> desce a +5m congelado -> Descongela e cai 5m perfeitamente.
+-- Bonecos: Cai direto de +40m.
 -- =========================================================================
 local function SmartTeleport(targetPos, isDelivery)
     local c, rt, hum = getChar()
@@ -35,13 +35,7 @@ local function SmartTeleport(targetPos, isDelivery)
     local car = vFolder and vFolder:FindFirstChild(lp.Name) or ws:FindFirstChild(lp.Name)
 
     if car then
-        local startHeight = 80 -- Altura segura para queda livre
-        local finalPos = targetPos + Vector3.new(0, startHeight, 0)
-        
-        local destCFrame = CFrame.new(finalPos)
         local currentPivot = car:GetPivot()
-        local delta = destCFrame * currentPivot:Inverse()
-
         local partsToMove = {}
         local estados = {}
 
@@ -70,21 +64,32 @@ local function SmartTeleport(targetPos, isDelivery)
         plat.Transparency = 1 
         plat.Parent = ws
 
-        -- Congela Física apenas para o salto inicial
+        -- Congela Física
         for _, p in pairs(partsToMove) do
             estados[p] = p.Anchored
             p.Anchored = true
+            p.Velocity, p.RotVelocity = Vector3.zero, Vector3.zero
         end
 
-        -- Teleporta para o céu (+80)
+        -- PASSO 1: Vai para o céu (+60m) para carregar o mapa sem risco de colisão
+        local highPos = targetPos + Vector3.new(0, 60, 0)
+        local deltaHigh = CFrame.new(highPos) * currentPivot:Inverse()
         for _, p in pairs(partsToMove) do
-            p.CFrame = delta * p.CFrame
+            p.CFrame = deltaHigh * p.CFrame
         end
 
-        -- Pausa mínima para o Roblox registar a posição antes de soltar
-        task.wait(0.1)
+        task.wait(0.5) -- Tempo para o Roblox processar e renderizar o chão lá em baixo
 
-        -- SOLTA TUDO! (Queda Livre Natural)
+        -- PASSO 2: Desce congelado até mesmo acima da zona (+5m)
+        local lowPos = targetPos + Vector3.new(0, 5, 0)
+        local deltaLow = CFrame.new(lowPos) * CFrame.new(highPos):Inverse()
+        for _, p in pairs(partsToMove) do
+            p.CFrame = deltaLow * p.CFrame
+        end
+
+        task.wait(0.1) -- Estabiliza antes da queda
+
+        -- PASSO 3: Solta a física (Queda mínima de 5 metros)! Aterra perfeito e ativa hitbox!
         for p, state in pairs(estados) do
             if p and p.Parent then
                 p.Anchored = state
@@ -93,22 +98,19 @@ local function SmartTeleport(targetPos, isDelivery)
             end
         end
         
-        -- Tempo para a gravidade puxar o carro até bater na plataforma (~2 segundos)
-        task.wait(2)
-        
-        -- A plataforma fica lá durante 10 segundos para a entrega não deslizar
+        -- A plataforma fica lá durante 10 segundos
         task.spawn(function()
             task.wait(10)
             if plat then plat:Destroy() end
         end)
     else
-        -- REGRA PARA BONECO (Sem Carro)
+        -- REGRA PARA BONECO (Sem Carro) -> Cai de 40 metros
         if rt then
             rt.Velocity, rt.AssemblyLinearVelocity = Vector3.zero, Vector3.zero
             if isDelivery then
-                rt.CFrame = CFrame.new(targetPos + Vector3.new(10, 80, 10))
+                rt.CFrame = CFrame.new(targetPos + Vector3.new(10, 40, 10))
             else
-                rt.CFrame = CFrame.new(targetPos + Vector3.new(0, 80, 0))
+                rt.CFrame = CFrame.new(targetPos + Vector3.new(0, 40, 0))
             end
         end
     end
