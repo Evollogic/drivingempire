@@ -4,6 +4,7 @@ local players = game:GetService("Players")
 local lp = players.LocalPlayer
 local remotes = rs:WaitForChild("Remotes")
 local PathfindingService = game:GetService("PathfindingService")
+local uis = game:GetService("UserInputService")
 
 if getgenv().DeliveryLoop then pcall(task.cancel, getgenv().DeliveryLoop) end
 getgenv().AutoFarmDelivery, getgenv().JobPhase = true, "Init"
@@ -33,7 +34,7 @@ UICorner.CornerRadius = UDim.new(0, 8)
 local title = Instance.new("TextLabel", logFrame)
 title.Size = UDim2.new(1, -100, 0, 30)
 title.BackgroundTransparency = 1
-title.Text = " 📜 Logs de Entrega"
+title.Text = " 📜 Logs de Entrega e Condução"
 title.TextColor3 = Color3.fromRGB(255, 255, 255)
 title.Font = Enum.Font.GothamBold
 title.TextSize = 14
@@ -97,6 +98,30 @@ end)
 addLog("Sistema de Logs Iniciado!")
 
 -- =========================================================================
+-- DETETOR DE CONDUÇÃO (NOVO)
+-- =========================================================================
+uis.InputBegan:Connect(function(input, gameProcessed)
+    -- Ignora se estiveres a escrever no chat
+    if gameProcessed then return end
+    
+    if input.KeyCode == Enum.KeyCode.W or input.KeyCode == Enum.KeyCode.Up then
+        addLog("▶️ AÇÃO: Acelerando (Pressionou W)")
+    elseif input.KeyCode == Enum.KeyCode.S or input.KeyCode == Enum.KeyCode.Down then
+        addLog("🛑 AÇÃO: Freando/Ré (Pressionou S)")
+    end
+end)
+
+uis.InputEnded:Connect(function(input, gameProcessed)
+    if gameProcessed then return end
+    
+    if input.KeyCode == Enum.KeyCode.W or input.KeyCode == Enum.KeyCode.Up then
+        addLog("⏸️ AÇÃO: Parou de Acelerar (Soltou W)")
+    elseif input.KeyCode == Enum.KeyCode.S or input.KeyCode == Enum.KeyCode.Down then
+        addLog("⏸️ AÇÃO: Parou de Frear (Soltou S)")
+    end
+end)
+
+-- =========================================================================
 -- FUNÇÕES DE SUPORTE
 -- =========================================================================
 local function rWait(min, max)
@@ -119,12 +144,11 @@ local function getChar()
 end
 
 -- =========================================================================
--- FUNÇÃO DE TELEPORTE
+-- FUNÇÃO DE TELEPORTE (INTACTA)
 -- =========================================================================
 local function SmartTeleport(targetPos, isDelivery)
     local c, rt, hum = getChar()
     
-    -- VERIFICAÇÃO INFALÍVEL: O boneco está sentado?
     local car = nil
     if hum and hum.SeatPart then
         local seatModel = hum.SeatPart:FindFirstAncestorWhichIsA("Model")
@@ -274,41 +298,32 @@ getgenv().DeliveryLoop = task.spawn(function()
             end
             
             if pad then
-                addLog("JobPad encontrado. Aproximando-se...")
                 SmartTeleport(pad.Parent.Position, false)
                 
-                addLog("Requisitando trabalho...")
                 rWait(1, 1.5)
                 fRem("RequestStartJobSession", "Delivery", "jobPad", mode)
                 rWait(1, 1.5)
                 fRem("AttemptDeliveryPickup")
-                addLog("Trabalho aceite. Coletando caixa...")
                 rWait(7, 16)
                 getgenv().JobPhase = "Farming"
             else
-                addLog("Aguardando JobPadPrompt...")
                 task.wait(2)
             end
             
         elseif getgenv().JobPhase == "Farming" then
             local t = ws:FindFirstChild("DeliveryTargetAnchor")
             if t and t.Parent == ws then
-                addLog("Alvo de entrega encontrado!")
                 SmartTeleport(t.Position, true)
                 
-                addLog("Tentando completar entrega...")
                 for i = 1, 2 do
                     fRem("AttemptDeliveryComplete")
                     task.wait(0.5)
                 end
                 
-                addLog("Aguardando confirmação...")
                 rWait(1, 5)
                 fRem("AttemptDeliveryPickup")
-                addLog("Próxima entrega pedida.")
                 rWait(7, 16)
             else
-                addLog("Aguardando Target Anchor aparecer...")
                 task.wait(1)
             end
         end
