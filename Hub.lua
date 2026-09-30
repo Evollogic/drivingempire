@@ -5,7 +5,7 @@ local ts = game:GetService("TweenService")
 local http = game:GetService("HttpService")
 local lp = plyrs.LocalPlayer
 
-local CURRENT_VERSION = "2.9"
+local CURRENT_VERSION = "3.0"
 local VERSION_URL = "https://raw.githubusercontent.com/Evollogic/drivingempire/main/version.txt"
 local SCRIPT_URL = "https://raw.githubusercontent.com/Evollogic/drivingempire/main/Hub.lua"
 
@@ -62,6 +62,7 @@ mainFrame.Position = UDim2.new(0.5, -110, 0.5, -190)
 mainFrame.BackgroundColor3 = Color3.fromRGB(10, 10, 15)
 mainFrame.BackgroundTransparency = 0.15
 mainFrame.BorderSizePixel = 0
+mainFrame.Active = true
 mainFrame.Visible = false
 mainFrame.Parent = sg
 
@@ -253,7 +254,7 @@ end)
 if getgenv().AutoFarmDelivery then task.spawn(function() if not lp.Character then lp.CharacterAdded:Wait() end task.wait(1) updateDeliveryUI() end) end
 
 -- ==========================================
--- SISTEMA ABSOLUTO DE ARRASTO E CLIQUE
+-- SISTEMA ABSOLUTO DE ARRASTO PELAS BORDAS
 -- ==========================================
 local ballDragging = false
 local ballDragStart = nil
@@ -263,7 +264,36 @@ local hubDragging = false
 local hubDragStart = nil
 local hubStartPos = nil
 
--- INICIAR ARRASTO DA BOLINHA
+-- Função de captura para o Hub
+local function onHubInputBegan(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+        hubDragging = true
+        hubDragStart = input.Position
+        hubStartPos = mainFrame.Position
+    end
+end
+
+-- Cabeça (TopBar)
+topBar.InputBegan:Connect(onHubInputBegan)
+
+-- Criação das 4 Zonas de Captura Invisíveis nas Bordas (Permite arrastar no Glow)
+local function createDragBorder(size, pos)
+    local border = Instance.new("TextButton", mainFrame)
+    border.Size = size
+    border.Position = pos
+    border.BackgroundTransparency = 1
+    border.Text = ""
+    border.ZIndex = 100 -- Fica por cima de tudo NAS BORDAS
+    border.InputBegan:Connect(onHubInputBegan)
+end
+
+-- Topo, Fundo, Esquerda e Direita (Expandidas 15px para fora)
+createDragBorder(UDim2.new(1, 30, 0, 20), UDim2.new(0, -15, 0, -15))
+createDragBorder(UDim2.new(1, 30, 0, 20), UDim2.new(0, -15, 1, -5))
+createDragBorder(UDim2.new(0, 20, 1, -30), UDim2.new(0, -15, 0, 15))
+createDragBorder(UDim2.new(0, 20, 1, -30), UDim2.new(1, -5, 0, 15))
+
+-- Iniciar arrasto da bolinha
 openBall.InputBegan:Connect(function(input)
     if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
         ballDragging = true
@@ -272,18 +302,7 @@ openBall.InputBegan:Connect(function(input)
     end
 end)
 
--- INICIAR ARRASTO DO HUB (Barra superior ou fundo limpo)
-local function onHubInputBegan(input)
-    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-        hubDragging = true
-        hubDragStart = input.Position
-        hubStartPos = mainFrame.Position
-    end
-end
-topBar.InputBegan:Connect(onHubInputBegan)
-mainFrame.InputBegan:Connect(onHubInputBegan)
-
--- MOVER (Lido globalmente na ecrã para evitar falhas)
+-- Processar movimento global no ecrã
 uis.InputChanged:Connect(function(input)
     if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
         if ballDragging then
@@ -297,21 +316,17 @@ uis.InputChanged:Connect(function(input)
     end
 end)
 
--- SOLTAR E VALIDAR CLIQUE
+-- Soltar e validar
 uis.InputEnded:Connect(function(input)
     if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-        -- Se soltou a bolinha
         if ballDragging then
             ballDragging = false
             local delta = input.Position - ballDragStart
-            -- Se mexeu menos de 5 pixeis, é CLIQUE! Abre o painel.
             if delta.Magnitude < 5 then
                 mainFrame.Visible = true
                 openBall.Visible = false
             end
         end
-        
-        -- Se soltou o hub
         if hubDragging then
             hubDragging = false
         end
