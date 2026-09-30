@@ -75,7 +75,6 @@ local function logMsg(msg)
     txt.TextWrapped = true
     txt.Text = t
     
-    -- Rola para o final automaticamente
     scroll.CanvasPosition = Vector2.new(0, scroll.AbsoluteWindowSize.Y + 9999)
     print(t)
 end
@@ -90,7 +89,7 @@ copyBtn.MouseButton1Click:Connect(function()
         copyBtn.Text = "COPIAR TODOS OS LOGS"
         copyBtn.BackgroundColor3 = Color3.fromRGB(50, 120, 50)
     else
-        copyBtn.Text = "ERRO: setclipboard INEXISTENTE (F9)"
+        copyBtn.Text = "ERRO: setclipboard INEXISTENTE"
         copyBtn.BackgroundColor3 = Color3.fromRGB(150, 50, 50)
         task.wait(2)
         copyBtn.Text = "COPIAR TODOS OS LOGS"
@@ -98,7 +97,7 @@ copyBtn.MouseButton1Click:Connect(function()
     end
 end)
 
-logMsg("Interface carregada. Aguardando eventos de teleporte...")
+logMsg("Interface carregada. Aguardando eventos...")
 
 -- =========================================================================
 -- FUNÇÕES DE SUPORTE
@@ -143,7 +142,7 @@ local function simularBotao(nomeBotao, pressionar)
 end
 
 -- =========================================================================
--- FUNÇÃO DE TELEPORTE COM LOGGING E PROTEÇÃO DE ÂNCORA
+-- FUNÇÃO DE TELEPORTE SMART
 -- =========================================================================
 local function SmartTeleport(targetPos, isDelivery)
     logMsg("--- INICIANDO SMART TELEPORT ---")
@@ -165,8 +164,6 @@ local function SmartTeleport(targetPos, isDelivery)
         local allVehicleParts = cPart:GetConnectedParts(true)
         local currentPivot = car:GetPivot()
         
-        logMsg("Pos Atual: " .. tostring(currentPivot.Position))
-        
         local flatCurrent = Vector3.new(currentPivot.Position.X, 0, currentPivot.Position.Z)
         local flatTarget = Vector3.new(targetPos.X, 0, targetPos.Z)
         local dir = Vector3.new(1, 0, 0)
@@ -178,53 +175,40 @@ local function SmartTeleport(targetPos, isDelivery)
             dir = (flatCurrent - flatTarget).Unit
         end
         
-        -- Altura ajustada
-        local startPos = Vector3.new(targetPos.X + (dir.X * 80), targetPos.Y + 4, targetPos.Z + (dir.Z * 80))
+        -- Adicionado +5 de margem para as rodas não nascerem dentro do asfalto
+        local startPos = Vector3.new(targetPos.X + (dir.X * 80), targetPos.Y + 5, targetPos.Z + (dir.Z * 80))
         local lookAt = Vector3.new(targetPos.X, startPos.Y, targetPos.Z)
         local destCFrame = CFrame.new(startPos, lookAt)
         
         logMsg("Calculado Destino CFrame: " .. tostring(startPos))
         
         local estadosColisao = {}
-        local estadosAncora = {}
         
-        logMsg("Preparando física (Ghost Mode e Anchoring)...")
+        logMsg("Aplicando Ghost Mode e anulando velocidades...")
         for _, p in pairs(allVehicleParts) do
             estadosColisao[p] = p.CanCollide
-            estadosAncora[p] = p.Anchored
-            
             local n = p.Name:lower()
-            if not (n:match("wheel") or n:match("tire") or n:match("rim") or n:match("suspension")) then
+            -- Proteção expandida para rodas
+            if not (n:match("wheel") or n:match("tire") or n:match("rim") or n:match("suspension") or n:match("whl")) then
                 p.CanCollide = false
             end
-            
-            -- Congela a física para evitar explosão de constraints
-            p.Anchored = true
             p.AssemblyLinearVelocity = Vector3.zero
             p.AssemblyAngularVelocity = Vector3.zero
         end
         
-        logMsg("Executando PivotTo...")
+        logMsg("Executando PivotTo (Sem Anchored)...")
         car:PivotTo(destCFrame)
         
+        -- Pausa mínima para o servidor registrar o teleporte antes de ligar o motor
         task.wait(0.2)
         
-        logMsg("Restaurando Âncoras e checando velocidades...")
-        local velocidadeAlta = false
+        -- Mata qualquer inércia residual após o teleporte
         for _, p in pairs(allVehicleParts) do
-            if estadosAncora[p] ~= nil then
-                p.Anchored = estadosAncora[p]
-            end
-            if p.AssemblyLinearVelocity.Magnitude > 100 then
-                velocidadeAlta = true
-            end
+            p.AssemblyLinearVelocity = Vector3.zero
+            p.AssemblyAngularVelocity = Vector3.zero
         end
         
-        if velocidadeAlta then
-            logMsg("AVISO CRÍTICO: Alta velocidade detectada pós-PivotTo! (Fling iminente)")
-        else
-            logMsg("Física estável. Iniciando condução...")
-        end
+        logMsg("Física estável. Iniciando condução...")
         
         simularBotao("Left", false)
         simularBotao("Right", false)
