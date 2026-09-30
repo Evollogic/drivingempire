@@ -49,7 +49,7 @@ local function simularBotao(nomeBotao, pressionar)
 end
 
 -- =========================================================================
--- FUNÇÃO DE TELEPORTE HÍBRIDA (CARRO FÍSICO E A PÉ)
+-- FUNÇÃO DE TELEPORTE HÍBRIDA (CARRO FÍSICO COM GHOST MODE E A PÉ)
 -- =========================================================================
 local function SmartTeleport(targetPos, isDelivery)
     local c, rt, hum = getChar()
@@ -64,11 +64,15 @@ local function SmartTeleport(targetPos, isDelivery)
 
     if car then
         -- ==========================================
-        -- REGRAS DO CARRO (FÍSICA REAL NO CHÃO)
+        -- REGRAS DO CARRO (GHOST MODE INTELIGENTE)
         -- ==========================================
+        local cPart = car.PrimaryPart or car:FindFirstChildWhichIsA("BasePart", true)
+        
+        -- CAPTURA INFALÍVEL: Pega no carro e na charrete sem quebrar amarras!
+        local allVehicleParts = cPart:GetConnectedParts(true)
         local currentPivot = car:GetPivot()
         
-        -- Descobre a direção ideal baseada de onde tu vens para evitar teleporte dentro de prédios
+        -- Calcula de onde vens para desenhar a reta
         local flatCurrent = Vector3.new(currentPivot.Position.X, 0, currentPivot.Position.Z)
         local flatTarget = Vector3.new(targetPos.X, 0, targetPos.Z)
         local dir = Vector3.new(1, 0, 0)
@@ -76,70 +80,74 @@ local function SmartTeleport(targetPos, isDelivery)
             dir = (flatCurrent - flatTarget).Unit
         end
         
-        local approachPosCenter = targetPos + (dir * 90) -- 90 metros de distância
+        local approachPosCenter = targetPos + (dir * 90)
         
-        -- Usa Raycast para colar o carro ao chão real!
+        -- Laser para colar o carro perfeitamente no chão
         local rayOrigin = approachPosCenter + Vector3.new(0, 300, 0)
         local raycastParams = RaycastParams.new()
-        raycastParams.FilterDescendantsInstances = {c, car} 
+        raycastParams.FilterDescendantsInstances = {c, car, ws:FindFirstChild("Vehicles")} 
         raycastParams.FilterType = Enum.RaycastFilterType.Exclude
         
         local rayResult = ws:Raycast(rayOrigin, Vector3.new(0, -600, 0), raycastParams)
         local startPos = approachPosCenter + Vector3.new(0, 10, 0)
         if rayResult then 
-            startPos = rayResult.Position + Vector3.new(0, 4, 0) -- Colado ao chão
+            startPos = rayResult.Position + Vector3.new(0, 4, 0)
         end
         
         local lookAt = Vector3.new(targetPos.X, startPos.Y, targetPos.Z)
         local destCFrame = CFrame.new(startPos, lookAt)
         local delta = destCFrame * currentPivot:Inverse()
 
-        -- Captura TODAS as peças num raio GIGANTE (100 studs) para apanhar a charrete/vagão
-        local partsToMove = {}
-        local processed = {}
-        local partsInRadius = ws:GetPartBoundsInRadius(currentPivot.Position, 100)
-        
-        for _, p in pairs(partsInRadius) do
-            if p:IsA("BasePart") and not p.Anchored then
-                local model = p:FindFirstAncestorWhichIsA("Model")
-                if model and model:FindFirstChild("Humanoid") and model ~= c then
-                    continue -- Ignora outros jogadores
-                end
-                if not processed[p] then
-                    table.insert(partsToMove, p)
-                    processed[p] = true
-                end
+        -- GHOST MODE: Desativa colisão da lataria, mas deixa as RODAS ativadas para tocar no chão!
+        local estadosColisao = {}
+        for _, p in pairs(allVehicleParts) do
+            estadosColisao[p] = p.CanCollide
+            local n = p.Name:lower()
+            -- Se não for roda/pneu, atravessa paredes!
+            if not (n:match("wheel") or n:match("tire") or n:match("rim") or n:match("suspension")) then
+                p.CanCollide = false
             end
+            
+            -- Para evitar o bug do void, zera a inércia antes de teleportar
+            p.AssemblyLinearVelocity = Vector3.zero
+            p.AssemblyAngularVelocity = Vector3.zero
         end
 
-        -- Teleporta tudo instantaneamente para o chão
-        for _, p in pairs(partsToMove) do 
-            p.Velocity, p.RotVelocity = Vector3.zero, Vector3.zero
+        -- Teleporta o grupo mecânico inteiro mantendo os ângulos
+        for _, p in pairs(allVehicleParts) do 
             p.CFrame = delta * p.CFrame 
         end
 
-        -- Espera o carro e a charrete assentarem na gravidade
-        task.wait(1.5)
+        -- Dá 1 segundo para a gravidade e as rodas assentarem no asfalto
+        task.wait(1)
 
-        -- Simula Condução Real (deixa o motor atuar para sofrer o relevo)
+        -- CONDUÇÃO CINEMÁTICA E RETA (Sem colidir com o ambiente, apenas com o chão)
+        simularBotao("Left", false)
+        simularBotao("Right", false)
         simularBotao("Throttle", true)
         
-        -- Monitoriza a viagem física até chegar ao destino
         local timeOut = 0
         while timeOut < 6 do
-            local dist = (car:GetPivot().Position * Vector3.new(1,0,1) - targetPos * Vector3.new(1,0,1)).Magnitude
+            local dist = (cPart.Position * Vector3.new(1,0,1) - targetPos * Vector3.new(1,0,1)).Magnitude
             if dist < 20 then break end
             timeOut = timeOut + task.wait(0.1)
         end
 
-        -- Chegou à meta: Trava!
+        -- Chegou: Trava!
         simularBotao("Throttle", false)
         simularBotao("Brake", true)
         task.wait(1)
         simularBotao("Brake", false)
+        
+        -- Restaura a física normal para o jogo aceitar a entrega
+        for _, p in pairs(allVehicleParts) do
+            if estadosColisao[p] ~= nil then p.CanCollide = estadosColisao[p] end
+            p.AssemblyLinearVelocity = Vector3.zero
+            p.AssemblyAngularVelocity = Vector3.zero
+        end
     else
         -- ==========================================
-        -- REGRAS A PÉ (INTACTAS)
+        -- REGRAS A PÉ (FUNCIONANDO 100%)
         -- ==========================================
         if rt and hum then
             local outOffset = Vector3.new(30, 0, 0)
