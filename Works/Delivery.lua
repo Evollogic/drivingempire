@@ -25,7 +25,7 @@ local function getChar()
 end
 
 -- =========================================================================
--- FUNÇÃO DE TELEPORTE (CARRO MODO FANTASMA / BONECO PATHFINDING)
+-- FUNÇÃO DE TELEPORTE (CARRO MODO FANTASMA / BONECO PATHFINDING CHÃO EXATO)
 -- =========================================================================
 local function SmartTeleport(targetPos)
     local c, rt, hum = getChar()
@@ -33,7 +33,6 @@ local function SmartTeleport(targetPos)
     local car = vFolder and vFolder:FindFirstChild(lp.Name) or ws:FindFirstChild(lp.Name)
 
     if car then
-        -- (A tua regra do carro continua perfeita com o modo fantasma)
         local approachPos = targetPos + Vector3.new(60, 5, 0)
         local finalPos = targetPos + Vector3.new(0, 5, 0)
         
@@ -113,48 +112,66 @@ local function SmartTeleport(targetPos)
         end)
     else
         -- =====================================================================
-        -- REGRA PARA BONECO (PATHFINDING VERDADEIRO)
+        -- REGRA PARA BONECO (PATHFINDING VERDADEIRO COM RAYCAST NO CHÃO)
         -- =====================================================================
         if rt and hum then
             rt.Velocity, rt.AssemblyLinearVelocity = Vector3.zero, Vector3.zero
             
-            -- 1. Teleporta para o ar (30 studs ao lado) e deixa a gravidade puxar para o chão
-            rt.CFrame = CFrame.new(targetPos + Vector3.new(30, 10, 0))
-            task.wait(1) -- Tempo essencial para os pés tocarem no chão físico do mapa
+            -- 1. Usa um Laser (Raycast) para descobrir onde é o chão exato!
+            local offsetHorizontal = targetPos + Vector3.new(30, 0, 0)
+            local rayOrigin = offsetHorizontal + Vector3.new(0, 200, 0) -- Começa muito alto
+            local rayDirection = Vector3.new(0, -400, 0) -- Aponta para baixo
             
-            -- 2. Cria o trajeto (Path)
+            local raycastParams = RaycastParams.new()
+            raycastParams.FilterDescendantsInstances = {c} -- Ignora o próprio jogador
+            raycastParams.FilterType = Enum.RaycastFilterType.Exclude
+            
+            local rayResult = ws:Raycast(rayOrigin, rayDirection, raycastParams)
+            local spawnNoChao = offsetHorizontal + Vector3.new(0, 3, 0) -- fallback
+            
+            if rayResult then
+                -- O laser bateu no chão! Spawnar a 3 studs (altura da cintura) acima disso
+                spawnNoChao = rayResult.Position + Vector3.new(0, 3, 0)
+            end
+            
+            -- 2. Teleporta o boneco perfeitamente em pé no chão
+            rt.CFrame = CFrame.new(spawnNoChao)
+            task.wait(0.2) -- Dá 0.2s para o jogo o registar no NavMesh
+            
+            -- 3. Cria e calcula o caminho até ao alvo
             local path = PathfindingService:CreatePath({
                 AgentRadius = 2,
                 AgentHeight = 5,
                 AgentCanJump = true
             })
             
-            -- Calcula a rota no mapa
             local success, errorMessage = pcall(function()
                 path:ComputeAsync(rt.Position, targetPos)
             end)
             
             if success and path.Status == Enum.PathStatus.Success then
-                -- O boneco vai seguir ponto por ponto com animação
                 local waypoints = path:GetWaypoints()
                 
                 for _, waypoint in ipairs(waypoints) do
-                    -- Se a rota disser que tem um passeio ou obstáculo, o boneco salta!
                     if waypoint.Action == Enum.PathWaypointAction.Jump then
                         hum.Jump = true
                     end
                     
-                    -- Anda até ao pontinho invisível
+                    -- Pede ao boneco para andar para o waypoint
                     hum:MoveTo(waypoint.Position)
                     
-                    -- Espera o boneco chegar fisicamente ao ponto antes de ir pro próximo
-                    local reached = hum.MoveToFinished:Wait()
-                    if not reached then
-                        break -- Se travar, cancela
+                    -- Mede a distância (ignora o Y para não bugar em subidas)
+                    local timeOut = 0
+                    while timeOut < 2 do
+                        local dist = (rt.Position * Vector3.new(1,0,1) - waypoint.Position * Vector3.new(1,0,1)).Magnitude
+                        if dist < 2.5 then
+                            break -- Chegou ao ponto, passa para o próximo
+                        end
+                        timeOut = timeOut + task.wait()
                     end
                 end
             else
-                -- Se não conseguir gerar o caminho (ex: mapa sem chão), vai num tiro só
+                -- Se não houver chão válido para calcular a rota, caminha em linha reta
                 hum:MoveTo(targetPos)
                 task.wait(2)
             end
