@@ -4,7 +4,6 @@ local remotes=rs:WaitForChild("Remotes")
 if getgenv().DeliveryLoop then pcall(task.cancel,getgenv().DeliveryLoop) end
 getgenv().AutoFarmDelivery,getgenv().JobPhase=true,"Init"
 
--- Função de Randomização
 local function rWait(min, max)
     task.wait(math.random(min * 10, max * 10) / 10)
 end
@@ -25,7 +24,8 @@ local function getChar()
 end
 
 -- =========================================================================
--- FUNÇÃO DE TELEPORTE (BYPASS DE FRONTEIRA + MODO FANTASMA)
+-- FUNÇÃO DE TELEPORTE (BYPASS DE FRONTEIRA)
+-- Humanoide: Força a animação de andar usando um loop e o MoveTo().
 -- =========================================================================
 local function SmartTeleport(targetPos)
     local c, rt, hum = getChar()
@@ -33,7 +33,6 @@ local function SmartTeleport(targetPos)
     local car = vFolder and vFolder:FindFirstChild(lp.Name) or ws:FindFirstChild(lp.Name)
 
     if car then
-        -- Ponto de Aproximação (60 metros para o lado)
         local approachPos = targetPos + Vector3.new(60, 5, 0)
         local finalPos = targetPos + Vector3.new(0, 5, 0)
         
@@ -42,8 +41,6 @@ local function SmartTeleport(targetPos)
         local delta = destCFrame * currentPivot:Inverse()
 
         local modelsToMove = {car}
-        
-        -- Filtro Anti-Lixo
         for _, obj in pairs(ws:GetChildren()) do
             if obj:IsA("Model") and obj ~= car and obj ~= c then
                 if not obj:FindFirstChild("Humanoid") then
@@ -73,24 +70,21 @@ local function SmartTeleport(targetPos)
         plat.Transparency = 1 
         plat.Parent = ws
 
-        -- 1. Congela tudo e DESATIVA A COLISÃO (Fantasma)
         local estadosColisao = {}
         for _, p in pairs(partsToMove) do
             estadosColisao[p] = p.CanCollide
-            p.CanCollide = false -- Atravessa paredes, árvores e prédios
+            p.CanCollide = false
             p.Anchored = true
             p.Velocity = Vector3.zero
             p.RotVelocity = Vector3.zero
         end
 
-        -- Teleporta para o Ponto de Aproximação
         for _, p in pairs(partsToMove) do
             p.CFrame = delta * p.CFrame
         end
 
         task.wait(0.5)
 
-        -- 2. DESLIZA PARA DENTRO DA ZONA (Sem colidir com nada no caminho)
         local slideSteps = 30
         local stepVec = (finalPos - approachPos) / slideSteps
         
@@ -101,12 +95,11 @@ local function SmartTeleport(targetPos)
             task.wait() 
         end
 
-        -- 3. Descongela, estabiliza e RESTAURA A COLISÃO no centro
         for _, p in pairs(partsToMove) do
             if p and p.Parent then
                 p.Anchored = false
                 if estadosColisao[p] ~= nil then
-                    p.CanCollide = estadosColisao[p] -- Volta ao normal
+                    p.CanCollide = estadosColisao[p]
                 end
                 p.Velocity = Vector3.zero
                 p.RotVelocity = Vector3.zero
@@ -118,13 +111,32 @@ local function SmartTeleport(targetPos)
             if plat then plat:Destroy() end
         end)
     else
-        -- REGRA PARA BONECO (A Pé)
+        -- REGRA PARA BONECO (Andar Verdadeiro)
         if rt and hum then
             rt.Velocity, rt.AssemblyLinearVelocity = Vector3.zero, Vector3.zero
-            rt.CFrame = CFrame.new(targetPos + Vector3.new(30, 4, 0))
-            task.wait(0.2)
-            hum:MoveTo(targetPos)
-            task.wait(1.5)
+            
+            -- Ponto inicial no chão (30 studs de distância)
+            local startPos = targetPos + Vector3.new(30, 3, 0)
+            rt.CFrame = CFrame.new(startPos)
+            
+            -- Espera a física de queda e gravidade estabilizar o boneco no chão
+            task.wait(0.5)
+            
+            -- LOOP PARA FORÇAR A ANIMAÇÃO DE ANDAR
+            -- O loop só para quando o boneco estiver a menos de 3 studs do alvo
+            local maxTime = 10 -- Evita o loop infinito se o boneco ficar preso
+            local startTime = tick()
+            
+            while (rt.Position - targetPos).Magnitude > 3 do
+                if tick() - startTime > maxTime then break end
+                
+                -- Pede ao jogo para mover as pernas na direção do alvo
+                hum:MoveTo(targetPos)
+                task.wait(0.1) -- Atualiza o comando a cada 0.1s para o jogo não cancelar
+            end
+            
+            -- Força a paragem
+            hum:MoveTo(rt.Position)
         end
     end
 end
