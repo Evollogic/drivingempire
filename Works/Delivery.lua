@@ -283,9 +283,9 @@ getgenv().DeliveryLoop = task.spawn(function()
             fRem("RequestStartJobSession", "Delivery", "jobPad", mode)
             fRem("AttemptDeliveryPickup")
             
-            -- TEMPO DE COLETA EXATO (Mínimo 6s, Máximo 10s)
-            logMsg("Arrived at center. Waiting collection timer (6s - 10s)...")
-            rWait(6.0, 10.0) 
+            -- TEMPO DE COLETA AJUSTADO (Mínimo 8s, Máximo 13s)
+            logMsg("Arrived at center. Waiting collection timer (8s - 13s)...")
+            rWait(8.0, 13.0) 
             
             getgenv().JobPhase = "Farming"
             
