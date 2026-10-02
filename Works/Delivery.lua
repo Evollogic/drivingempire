@@ -118,11 +118,13 @@ local function SmartTeleport(targetPos, isDelivery)
             dir = (flatCurrent - flatTarget).Unit
         end
 
-        local startPos = Vector3.new(targetPos.X + (dir.X * 25), targetPos.Y + 5, targetPos.Z + (dir.Z * 25))
+        -- Limite restaurado com aleatoriedade (85 a 100 studs) para entrar de fora da área
+        local carOffset = math.random(85, 100)
+        local startPos = Vector3.new(targetPos.X + (dir.X * carOffset), targetPos.Y + 5, targetPos.Z + (dir.Z * carOffset))
         local lookAt = Vector3.new(targetPos.X, startPos.Y, targetPos.Z)
         local destCFrame = CFrame.new(startPos, lookAt)
 
-        logMsg("Calculated Destination CFrame: " .. tostring(startPos))
+        logMsg("Calculated Destination CFrame (Offset: " .. carOffset .. "): " .. tostring(startPos))
 
         local estadosColisao = {}
 
@@ -183,7 +185,9 @@ local function SmartTeleport(targetPos, isDelivery)
     else
         logMsg("Mode: ON FOOT. Calculating Raycast...")
         if rt and hum then
-            local outOffset = Vector3.new(3, 0, 0)
+            -- Limite restaurado com aleatoriedade (35 a 45 studs)
+            local charOffset = math.random(35, 45)
+            local outOffset = Vector3.new(charOffset, 0, 0)
             local approachPosCenter = targetPos + outOffset
 
             local rayOrigin = approachPosCenter + Vector3.new(0, 200, 0)
