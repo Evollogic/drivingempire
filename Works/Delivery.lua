@@ -13,6 +13,7 @@ end
 
 getgenv().AutoFarmDelivery = true
 getgenv().JobPhase = "Init"
+getgenv().LastAnchor = nil
 
 -- =========================================================================
 -- INTEGRAÇÃO COM OS LOGS DO HUB
@@ -208,13 +209,14 @@ local function SmartTeleport(targetPos, isDelivery)
             hum.Sit = false
             hum:ChangeState(Enum.HumanoidStateType.Freefall)
 
-            task.wait(0.6)
+            -- Removido wait() demorado, começa a correr quase instantaneamente
+            task.wait(0.2)
             hum:ChangeState(Enum.HumanoidStateType.Running)
             hum:MoveTo(targetPos)
 
             local timeOut = 0
             while timeOut < 4 do
-                if (rt.Position * Vector3.new(1,0,1) - targetPos * Vector3.new(1,0,1)).Magnitude < 3.5 then
+                if (rt.Position * Vector3.new(1,0,1) - targetPos * Vector3.new(1,0,1)).Magnitude < 4.5 then
                     break
                 end
                 timeOut = timeOut + task.wait(0.1)
@@ -228,7 +230,7 @@ end
 -- LOOP DA ENTREGA
 -- =========================================================================
 getgenv().DeliveryLoop = task.spawn(function()
-    while task.wait(0.5) do
+    while task.wait(0.2) do
         if not getgenv().AutoFarmDelivery then break end
 
         if getgenv().JobPhase == "Init" then
@@ -243,32 +245,33 @@ getgenv().DeliveryLoop = task.spawn(function()
                 end
             end
             if pad then
-                -- Removido o SmartTeleport(pad.Parent.Position). Agora ele começa direto da posição atual!
                 logMsg("Starting new route (" .. mode .. ") directly from current location")
                 
-                -- Tempos reduzidos para no máximo 15 segundos no total
-                rWait(0.5, 1.5); fRem("RequestStartJobSession", "Delivery", "jobPad", mode)
-                rWait(0.5, 1.5); fRem("AttemptDeliveryPickup")
-                rWait(5, 12); getgenv().JobPhase = "Farming"
+                -- Tempos reduzidos (Menos ~4 segundos que o original)
+                rWait(0.5, 1.0); fRem("RequestStartJobSession", "Delivery", "jobPad", mode)
+                rWait(0.5, 1.0); fRem("AttemptDeliveryPickup")
+                rWait(3, 8); getgenv().JobPhase = "Farming"
             else
                 task.wait(2)
             end
         elseif getgenv().JobPhase == "Farming" then
             local t = ws:FindFirstChild("DeliveryTargetAnchor")
-            if t and t.Parent == ws then
+            
+            -- Memória adicionada: Ele não faz o script ler e tentar entregar na MESMA âncora que ele acabou de deixar.
+            if t and t.Parent == ws and t ~= getgenv().LastAnchor then
                 SmartTeleport(t.Position, true)
                 
-                -- ENTREGA EXPRESSA (Menos de 1 segundo)
+                -- ENTREGA INSTANTÂNEA
                 fRem("AttemptDeliveryComplete")
-                task.wait(0.2)
+                task.wait(0.1)
                 fRem("AttemptDeliveryComplete")
-                task.wait(0.3)
+                task.wait(0.1)
                 
-                -- COLETA PADRÃO (Puxa a nova caixa e já parte)
+                -- COLETA A PRÓXIMA E SALVA A ÂNCORA VELHA
                 fRem("AttemptDeliveryPickup")
-                task.wait(0.5)
+                getgenv().LastAnchor = t
             else
-                task.wait(1)
+                task.wait(0.1)
             end
         end
     end

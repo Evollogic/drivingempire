@@ -9,13 +9,14 @@ local VERSION_URL = "https://raw.githubusercontent.com/Evollogic/drivingempire/m
 local SCRIPT_URL = "https://raw.githubusercontent.com/Evollogic/drivingempire/main/Hub.lua"
 
 local configName = "EmpireConfig.json"
-local cfg = { delivery = false, deliveryMode = "Easy" }                 
+local cfg = { delivery = false, deliveryMode = "Easy", devMode = false }                 
 if isfile and isfile(configName) then
     pcall(function()
         local data = http:JSONDecode(readfile(configName))
         if data and type(data) == "table" then
             if data.delivery ~= nil then cfg.delivery = data.delivery end
             if data.deliveryMode ~= nil then cfg.deliveryMode = data.deliveryMode end
+            if data.devMode ~= nil then cfg.devMode = data.devMode end
         end
     end)
 end
@@ -73,7 +74,7 @@ end
 -- ==========================================
 -- VARIÁVEIS DO DEV MODE
 -- ==========================================
-if getgenv().DevMode == nil then getgenv().DevMode = false end
+getgenv().DevMode = cfg.devMode
 local isLogOpen = false
 
 local termFrame = Instance.new("Frame", sg)
@@ -354,6 +355,9 @@ end
 
 devToggleBtn.MouseButton1Click:Connect(function()
     getgenv().DevMode = false
+    cfg.devMode = false
+    saveCfg()
+    
     isLogOpen = false
     termFrame.Visible = false
     devToggleBtn.Visible = false 
@@ -375,7 +379,6 @@ logToggleBtn.MouseButton1Click:Connect(function()
 end)
 
 termCloseBtn.MouseButton1Click:Connect(function()
-    -- Fecha e atualiza o estado do botão
     isLogOpen = false
     termFrame.Visible = false
     logToggleBtn.BackgroundColor3 = Color3.fromRGB(200, 40, 40)
@@ -536,6 +539,8 @@ uis.InputEnded:Connect(function(input)
 
                     if not getgenv().DevMode then
                         getgenv().DevMode = true
+                        cfg.devMode = true
+                        saveCfg()
                         
                         devToggleBtn.Visible = true
                         devToggleBtn.BackgroundColor3 = Color3.fromRGB(0, 200, 100)
@@ -551,7 +556,6 @@ uis.InputEnded:Connect(function(input)
                     termFrame.Visible = true
                 else
                     mainFrame.Visible = not mainFrame.Visible
-                    -- Lógica de abrir/fechar o terminal junto com o hub APENAS se o botão do Log estiver ON
                     if getgenv().DevMode and isLogOpen then
                         termFrame.Visible = mainFrame.Visible
                     else
