@@ -73,14 +73,15 @@ end
 -- ==========================================
 -- TERMINAL DE DEBUG (DEV MODE INVISÍVEL)
 -- ==========================================
-getgenv().DevMode = false
+if getgenv().DevMode == nil then getgenv().DevMode = false end
+
 local termFrame = Instance.new("Frame", sg)
 termFrame.Size = UDim2.new(0, 320, 0, 280)
 termFrame.Position = UDim2.new(1, -340, 0, 20)
 termFrame.BackgroundColor3 = Color3.fromRGB(15, 15, 18)
-termFrame.Visible = false
+termFrame.Visible = getgenv().DevMode
 termFrame.Active = true
-termFrame.Draggable = true
+termFrame.Draggable = false -- Desativado o nativo para usar nosso custom drag
 Instance.new("UICorner", termFrame).CornerRadius = UDim.new(0, 6)
 Instance.new("UIStroke", termFrame).Color = Color3.fromRGB(80, 80, 90)
 
@@ -158,9 +159,8 @@ termCopyBtn.MouseButton1Click:Connect(function()
 end)
 
 termCloseBtn.MouseButton1Click:Connect(function()
+    -- Fecha apenas visualmente, não desliga o Dev Mode!
     termFrame.Visible = false
-    getgenv().DevMode = false
-    ShowNotification("❌ Dev Mode DISABLED!", Color3.fromRGB(255, 100, 100))
 end)
 
 -- ==========================================
@@ -251,7 +251,7 @@ Instance.new("UICorner", minBtn).CornerRadius = UDim.new(0, 6)
 
 minBtn.MouseButton1Click:Connect(function()
     mainFrame.Visible = false
-    termFrame.Visible = false -- Fecha o log junto com o hub
+    termFrame.Visible = false -- Oculta ambos simultaneamente
 end)                                                                    
 
 local tabContainer = Instance.new("Frame", mainFrame)
@@ -292,9 +292,10 @@ farmPage.Size = UDim2.new(1, 0, 1, 0)
 farmPage.BackgroundTransparency = 1
 farmPage.ScrollBarThickness = 2
 
-local configPage = Instance.new("Frame", contentArea)
+local configPage = Instance.new("ScrollingFrame", contentArea)
 configPage.Size = UDim2.new(1, 0, 1, 0)
 configPage.BackgroundTransparency = 1
+configPage.ScrollBarThickness = 2
 configPage.Visible = false
 
 tabFarm.MouseButton1Click:Connect(function()
@@ -315,6 +316,12 @@ farmLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
 local farmPadding = Instance.new("UIPadding", farmPage)
 farmPadding.PaddingTop = UDim.new(0, 15)
 
+local configLayout = Instance.new("UIListLayout", configPage)
+configLayout.Padding = UDim.new(0, 10)
+configLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+local configPadding = Instance.new("UIPadding", configPage)
+configPadding.PaddingTop = UDim.new(0, 15)
+
 local function createToggle(name, parent, sizeY)
     local btn = Instance.new("TextButton", parent)
     btn.Size = UDim2.new(0.9, 0, 0, sizeY or 45)
@@ -331,6 +338,27 @@ local function createToggle(name, parent, sizeY)
     return btn
 end
 
+-- ==========================================
+-- SETTINGS: BOTÃO DEV MODE
+-- ==========================================
+local devToggleBtn = createToggle("Dev Mode", configPage, 45)
+devToggleBtn.Visible = getgenv().DevMode
+if getgenv().DevMode then
+    devToggleBtn.BackgroundColor3 = Color3.fromRGB(0, 200, 100)
+    devToggleBtn.Text = "Dev Mode: ON"
+end
+
+devToggleBtn.MouseButton1Click:Connect(function()
+    -- Este sim desativa totalmente o Dev Mode!
+    getgenv().DevMode = false
+    termFrame.Visible = false
+    devToggleBtn.Visible = false -- Fica invisível até desbloquear de novo
+    ShowNotification("❌ Dev Mode DISABLED!", Color3.fromRGB(255, 100, 100))
+end)
+
+-- ==========================================
+-- FARM: OUTROS BOTÕES
+-- ==========================================
 local deliveryToggleBtn = createToggle("Auto Delivery", farmPage, 45)
 getgenv().AutoFarmDelivery = cfg.delivery
 getgenv().DeliveryInitialPosition = nil
@@ -380,33 +408,37 @@ end)
 if getgenv().AutoFarmDelivery then task.spawn(function() if not lp.Character then lp.CharacterAdded:Wait() end task.wait(1) updateDeliveryUI() end) end
 
 -- ==========================================
--- SISTEMA ABSOLUTO DE ARRASTO E CLIQUES
+-- SISTEMA DE ARRASTO SEPARADO (HUB vs TERM)
 -- ==========================================
-local ballDragging = false
-local ballDragStart = nil
-local ballStartPos = nil
+local ballDragging, ballDragStart, ballStartPos = false, nil, nil
 
-local hubDragging = false
-local hubDragStart = nil
-local hubStartPos = nil
+local mainFrameDragging = false
+local mainFrameDragStart = nil
+local mainFrameStartPos = nil
+
+local termFrameDragging = false
+local termFrameDragStart = nil
+local termFrameStartPos = nil
 
 local devClickCount = 0
 local lastClickTime = 0
 
+-- Captura do Hub Principal
 local function onHubInputBegan(input)
     if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-        hubDragging = true
-        hubDragStart = input.Position
-        hubStartPos = mainFrame.Position
+        mainFrameDragging = true
+        mainFrameDragStart = input.Position
+        mainFrameStartPos = mainFrame.Position
     end
 end
-
 topBar.InputBegan:Connect(onHubInputBegan)
+
+-- Captura do Terminal Independente
 termTop.InputBegan:Connect(function(input)
     if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-        hubDragging = true
-        hubDragStart = input.Position
-        hubStartPos = termFrame.Position
+        termFrameDragging = true
+        termFrameDragStart = input.Position
+        termFrameStartPos = termFrame.Position
     end
 end)
 
@@ -439,23 +471,27 @@ uis.InputChanged:Connect(function(input)
             local delta = input.Position - ballDragStart
             openBall.Position = UDim2.new(ballStartPos.X.Scale, ballStartPos.X.Offset + delta.X, ballStartPos.Y.Scale, ballStartPos.Y.Offset + delta.Y)
         end
-        if hubDragging then
-            local delta = input.Position - hubDragStart
-            if hubStartPos == mainFrame.Position then
-                mainFrame.Position = UDim2.new(hubStartPos.X.Scale, hubStartPos.X.Offset + delta.X, hubStartPos.Y.Scale, hubStartPos.Y.Offset + delta.Y)
-            else
-                termFrame.Position = UDim2.new(hubStartPos.X.Scale, hubStartPos.X.Offset + delta.X, hubStartPos.Y.Scale, hubStartPos.Y.Offset + delta.Y)
-            end
+        if mainFrameDragging then
+            local delta = input.Position - mainFrameDragStart
+            mainFrame.Position = UDim2.new(mainFrameStartPos.X.Scale, mainFrameStartPos.X.Offset + delta.X, mainFrameStartPos.Y.Scale, mainFrameStartPos.Y.Offset + delta.Y)
+        end
+        if termFrameDragging then
+            local delta = input.Position - termFrameDragStart
+            termFrame.Position = UDim2.new(termFrameStartPos.X.Scale, termFrameStartPos.X.Offset + delta.X, termFrameStartPos.Y.Scale, termFrameStartPos.Y.Offset + delta.Y)
         end
     end
 end)                                                                    
 
 uis.InputEnded:Connect(function(input)
     if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+        if mainFrameDragging then mainFrameDragging = false end
+        if termFrameDragging then termFrameDragging = false end
+        
         if ballDragging then
             ballDragging = false
             local delta = input.Position - ballDragStart
             
+            -- Detecta CLIQUE no Hambúrguer
             if delta.Magnitude < 5 then
                 local currentTime = tick()
                 if currentTime - lastClickTime > 1.2 then devClickCount = 0 end
@@ -473,15 +509,16 @@ uis.InputEnded:Connect(function(input)
 
                 if devClickCount >= 5 then
                     devClickCount = 0
-                    getgenv().DevMode = not getgenv().DevMode
-                    termFrame.Visible = getgenv().DevMode
-                    
-                    if getgenv().DevMode then
-                        ShowNotification("🐛 Dev Mode ENABLED!", Color3.fromRGB(100, 255, 100))
-                    else
-                        ShowNotification("❌ Dev Mode DISABLED!", Color3.fromRGB(255, 100, 100))
-                    end
                     ts:Create(openBall, TweenInfo.new(0.1), {Rotation = 0}):Play()
+
+                    if not getgenv().DevMode then
+                        getgenv().DevMode = true
+                        devToggleBtn.Visible = true
+                        devToggleBtn.BackgroundColor3 = Color3.fromRGB(0, 200, 100)
+                        devToggleBtn.Text = "Dev Mode: ON"
+                        ShowNotification("🐛 Dev Mode ENABLED!", Color3.fromRGB(100, 255, 100))
+                    end
+                    termFrame.Visible = true -- Reabre a janela se estivesse fechada
                 else
                     mainFrame.Visible = not mainFrame.Visible
                     if getgenv().DevMode then
@@ -490,7 +527,6 @@ uis.InputEnded:Connect(function(input)
                 end
             end
         end
-        if hubDragging then hubDragging = false end
     end
 end)
 

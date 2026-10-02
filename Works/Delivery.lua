@@ -118,7 +118,6 @@ local function SmartTeleport(targetPos, isDelivery)
             dir = (flatCurrent - flatTarget).Unit
         end
 
-        -- Encurtado de 80 para 25 studs para spawnar colado no alvo
         local startPos = Vector3.new(targetPos.X + (dir.X * 25), targetPos.Y + 5, targetPos.Z + (dir.Z * 25))
         local lookAt = Vector3.new(targetPos.X, startPos.Y, targetPos.Z)
         local destCFrame = CFrame.new(startPos, lookAt)
@@ -154,7 +153,6 @@ local function SmartTeleport(targetPos, isDelivery)
 
         local timeOut = 0
         while timeOut < 6 do
-            -- Reforça o noclip do carro durante a aceleração
             for _, p in pairs(allVehicleParts) do
                 local n = p.Name:lower()
                 if not (n:match("wheel") or n:match("tire") or n:match("rim") or n:match("suspension") or n:match("whl")) then
@@ -185,7 +183,6 @@ local function SmartTeleport(targetPos, isDelivery)
     else
         logMsg("Mode: ON FOOT. Calculating Raycast...")
         if rt and hum then
-            -- Encurtado de 30 para 3 studs
             local outOffset = Vector3.new(3, 0, 0)
             local approachPosCenter = targetPos + outOffset
 
@@ -256,11 +253,16 @@ getgenv().DeliveryLoop = task.spawn(function()
             local t = ws:FindFirstChild("DeliveryTargetAnchor")
             if t and t.Parent == ws then
                 SmartTeleport(t.Position, true)
-                for i = 1, 2 do
-                    fRem("AttemptDeliveryComplete"); task.wait(0.5)
-                end
-                rWait(1, 5); fRem("AttemptDeliveryPickup")
-                rWait(7, 16)
+                
+                -- ENTREGA EXPRESSA (Máximo de 1 segundo de intervalo)
+                fRem("AttemptDeliveryComplete")
+                task.wait(0.2)
+                fRem("AttemptDeliveryComplete") -- Dispara de novo por garantia
+                task.wait(0.3)
+                
+                -- Coleta a próxima caixa
+                fRem("AttemptDeliveryPickup")
+                task.wait(0.5) 
             else
                 task.wait(1)
             end
