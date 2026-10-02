@@ -278,27 +278,20 @@ getgenv().DeliveryLoop = task.spawn(function()
             local modeStr = getgenv().DeliveryMode
             local mode = (modeStr == "Hard" or modeStr == "HighRisk") and "HighRisk" or "Safe"
 
-            local pad = nil
-            for _,v in pairs(ws:GetDescendants()) do
-                if v:IsA("ProximityPrompt") and v.Name == "JobPadPrompt" then
-                    pad = v
-                    break
-                end
-            end
-            if pad then
-                logMsg("Starting new route (" .. mode .. ") directly from current location")
-                rWait(0.5, 1.0); fRem("RequestStartJobSession", "Delivery", "jobPad", mode)
-                rWait(0.5, 1.0); fRem("AttemptDeliveryPickup")
-                rWait(3, 8); getgenv().JobPhase = "Farming"
-            else
-                task.wait(2)
-            end
+            logMsg("Starting new route (" .. mode .. ") directly from current location")
+            
+            -- TEMPO DE COLETA AUMENTADO E SEGURO (Entre 4 e 10 segundos)
+            rWait(1.0, 2.0); fRem("RequestStartJobSession", "Delivery", "jobPad", mode)
+            rWait(1.0, 2.0); fRem("AttemptDeliveryPickup")
+            rWait(4, 10); getgenv().JobPhase = "Farming"
+            
         elseif getgenv().JobPhase == "Farming" then
             local t = ws:FindFirstChild("DeliveryTargetAnchor")
             if t and t.Parent == ws then
                 if t ~= getgenv().LastAnchor then
                     SmartTeleport(t.Position, true)
                     
+                    -- ENTREGA PERFEITA E RÁPIDA (Inalterada)
                     fRem("AttemptDeliveryComplete")
                     task.wait(0.1)
                     fRem("AttemptDeliveryComplete")
@@ -307,7 +300,6 @@ getgenv().DeliveryLoop = task.spawn(function()
                     fRem("AttemptDeliveryPickup")
                     getgenv().LastAnchor = t
                     
-                    -- Limpa a memória após um breve instante para permitir a próxima âncora gerar
                     task.spawn(function()
                         task.wait(1.5)
                         if getgenv().LastAnchor == t then
