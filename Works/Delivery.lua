@@ -1,31 +1,38 @@
 local ws = game:GetService("Workspace")
 local rs = game:GetService("ReplicatedStorage")
 local players = game:GetService("Players")
-local runService = game:GetService("RunService")
 local lp = players.LocalPlayer
 local remotes = rs:WaitForChild("Remotes")
 
-if getgenv().DeliveryLoop then
-    pcall(task.cancel, getgenv().DeliveryLoop)
-end
+if getgenv().DeliveryLoop then pcall(task.cancel, getgenv().DeliveryLoop) end
+if getgenv().NoclipLoop then getgenv().NoclipLoop:Disconnect() end
 
-getgenv().AutoFarmDelivery, getgenv().JobPhase = true, "Init"
+getgenv().JobPhase = "Init"
 
--- =========================================================================
--- SISTEMA DE LOGS (SOMENTE CONSOLE F9)
--- =========================================================================
+-- Função de Log conectada ao Hub
 local function logMsg(msg)
-    print(os.date("%H:%M:%S") .. " | " .. tostring(msg))
+    if getgenv().LogMsg then getgenv().LogMsg(msg) else print("Delivery: " .. tostring(msg)) end
 end
 
-logMsg("Script carregado. Aguardando eventos...")
+-- =========================================================================
+-- SISTEMA DE NOCLIP CONTÍNUO (GHOST MODE)
+-- =========================================================================
+getgenv().NoclipLoop = game:GetService("RunService").Stepped:Connect(function()
+    if not getgenv().AutoFarmDelivery then return end
+    local c = lp.Character
+    if c then
+        for _, p in pairs(c:GetChildren()) do
+            if p:IsA("BasePart") and (p.Name == "Torso" or p.Name == "UpperTorso" or p.Name == "LowerTorso" or p.Name == "Head") then
+                p.CanCollide = false
+            end
+        end
+    end
+end)
 
 -- =========================================================================
 -- FUNÇÕES DE SUPORTE
 -- =========================================================================
-local function rWait(min, max)
-    task.wait(math.random(min * 10, max * 10) / 10)
-end
+local function rWait(min, max) task.wait(math.random(min * 10, max * 10) / 10) end
 
 local function fRem(n,...)
     local r = remotes:FindFirstChild(n)
@@ -54,19 +61,16 @@ local function simularBotao(nomeBotao, pressionar)
         if getconnections then
             local estado = pressionar and Enum.UserInputState.Begin or Enum.UserInputState.End
             for _, conn in pairs(getconnections(pressionar and btn.InputBegan or btn.InputEnded)) do
-                pcall(function()
-                    conn.Function({UserInputType = Enum.UserInputType.Touch, UserInputState = estado})
-                end)
+                pcall(function() conn.Function({UserInputType = Enum.UserInputType.Touch, UserInputState = estado}) end)
             end
         end
     end
 end
 
 -- =========================================================================
--- FUNÇÃO DE TELEPORTE SMART COM FORCE-HOLD E NOCLIP
+-- FUNÇÃO DE TELEPORTE SMART COM FORCE-HOLD
 -- =========================================================================
 local function SmartTeleport(targetPos, isDelivery)
-    logMsg("--- INICIANDO SMART TELEPORT ---")
     logMsg("Alvo Pos: " .. tostring(targetPos))
 
     local c, rt, hum = getChar()
@@ -74,37 +78,23 @@ local function SmartTeleport(targetPos, isDelivery)
 
     if hum and hum.SeatPart then
         local seatModel = hum.SeatPart:FindFirstAncestorWhichIsA("Model")
-        if seatModel and seatModel ~= c then
-            car = seatModel
-        end
+        if seatModel and seatModel ~= c then car = seatModel end
     end
 
     if car then
-        logMsg("Modo: VEÍCULO. Carro detectado: " .. car.Name)
+        logMsg("Modo VEÍCULO. Ghost Mode Aplicado.")
         local cPart = car.PrimaryPart or car:FindFirstChildWhichIsA("BasePart", true)
         local allVehicleParts = cPart:GetConnectedParts(true)
         local currentPivot = car:GetPivot()
 
         local flatCurrent = Vector3.new(currentPivot.Position.X, 0, currentPivot.Position.Z)
         local flatTarget = Vector3.new(targetPos.X, 0, targetPos.Z)
-        local dir = Vector3.new(1, 0, 0)
+        local dir = (dist > 1) and (flatCurrent - flatTarget).Unit or Vector3.new(1, 0, 0)
 
-        local dist = (flatCurrent - flatTarget).Magnitude
-        logMsg("Distância 2D até o alvo: " .. string.format("%.2f", dist))
-
-        if dist > 1 then
-            dir = (flatCurrent - flatTarget).Unit
-        end
-
-        local startPos = Vector3.new(targetPos.X + (dir.X * 80), targetPos.Y + 5, targetPos.Z + (dir.Z * 80))
-        local lookAt = Vector3.new(targetPos.X, startPos.Y, targetPos.Z)
-        local destCFrame = CFrame.new(startPos, lookAt)
-
-        logMsg("Calculado Destino CFrame: " .. tostring(startPos))
+        local startPos = Vector3.new(targetPos.X + (dir.X * 25), targetPos.Y + 5, targetPos.Z + (dir.Z * 25))
+        local destCFrame = CFrame.new(startPos, Vector3.new(targetPos.X, startPos.Y, targetPos.Z))
 
         local estadosColisao = {}
-
-        logMsg("Aplicando Ghost Mode no Veículo...")
         for _, p in pairs(allVehicleParts) do
             estadosColisao[p] = p.CanCollide
             local n = p.Name:lower()
@@ -113,7 +103,6 @@ local function SmartTeleport(targetPos, isDelivery)
             end
         end
 
-        logMsg("Aplicando Force-Hold (Zerando inércia por 15 frames)...")
         for i = 1, 15 do
             car:PivotTo(destCFrame)
             for _, p in pairs(allVehicleParts) do
@@ -123,19 +112,19 @@ local function SmartTeleport(targetPos, isDelivery)
             task.wait()
         end
 
-        logMsg("Force-Hold concluído. Física estabilizada.")
-
         simularBotao("Left", false)
         simularBotao("Right", false)
         simularBotao("Throttle", true)
 
         local timeOut = 0
         while timeOut < 6 do
-            local currentDist = (cPart.Position * Vector3.new(1,0,1) - targetPos * Vector3.new(1,0,1)).Magnitude
-            if currentDist < 15 then
-                logMsg("Chegou no alvo de condução (Dist < 15). Trava acionada.")
-                break
+            for _, p in pairs(allVehicleParts) do
+                local n = p.Name:lower()
+                if not (n:match("wheel") or n:match("tire") or n:match("rim") or n:match("suspension") or n:match("whl")) then
+                    p.CanCollide = false
+                end
             end
+            if (cPart.Position * Vector3.new(1,0,1) - targetPos * Vector3.new(1,0,1)).Magnitude < 15 then break end
             timeOut = timeOut + task.wait(0.1)
         end
 
@@ -144,32 +133,19 @@ local function SmartTeleport(targetPos, isDelivery)
         task.wait(0.8)
         simularBotao("Brake", false)
 
-        logMsg("Restaurando colisões normais...")
         for _, p in pairs(allVehicleParts) do
-            if estadosColisao[p] ~= nil then
-                p.CanCollide = estadosColisao[p]
-            end
+            if estadosColisao[p] ~= nil then p.CanCollide = estadosColisao[p] end
         end
-        logMsg("--- FIM DO TELEPORTE (VEÍCULO) ---")
     else
-        logMsg("Modo: A PÉ. Calculando Raycast...")
+        logMsg("Modo A PÉ.")
         if rt and hum then
-            local outOffset = Vector3.new(30, 0, 0)
-            local approachPosCenter = targetPos + outOffset
-
-            local rayOrigin = approachPosCenter + Vector3.new(0, 200, 0)
+            local approachPosCenter = targetPos + Vector3.new(3, 0, 0)
             local raycastParams = RaycastParams.new()
             raycastParams.FilterDescendantsInstances = {c}
             raycastParams.FilterType = Enum.RaycastFilterType.Exclude
-            local rayResult = ws:Raycast(rayOrigin, Vector3.new(0, -400, 0), raycastParams)
+            local rayResult = ws:Raycast(approachPosCenter + Vector3.new(0, 200, 0), Vector3.new(0, -400, 0), raycastParams)
 
-            local startPos = approachPosCenter + Vector3.new(0, 10, 0)
-            if rayResult then
-                startPos = rayResult.Position + Vector3.new(0, 3, 0)
-                logMsg("Raycast acertou: " .. rayResult.Instance.Name .. " em " .. tostring(rayResult.Position))
-            else
-                logMsg("AVISO: Raycast falhou em encontrar chão! Usando fallback Y+10.")
-            end
+            local startPos = rayResult and (rayResult.Position + Vector3.new(0, 3, 0)) or (approachPosCenter + Vector3.new(0, 10, 0))
 
             rt.Velocity = Vector3.zero
             rt.CFrame = CFrame.new(startPos)
@@ -177,37 +153,15 @@ local function SmartTeleport(targetPos, isDelivery)
             hum.Sit = false
             hum:ChangeState(Enum.HumanoidStateType.Freefall)
 
-            -- Inicia o Noclip (Sem colisão para não travar em cercas/objetos)
-            logMsg("Ativando Noclip (Ghost Mode) para o personagem...")
-            local noclipConnection = runService.Stepped:Connect(function()
-                if c then
-                    for _, v in pairs(c:GetDescendants()) do
-                        if v:IsA("BasePart") then
-                            v.CanCollide = false
-                        end
-                    end
-                end
-            end)
-
             task.wait(0.6)
             hum:ChangeState(Enum.HumanoidStateType.Running)
             hum:MoveTo(targetPos)
 
             local timeOut = 0
             while timeOut < 4 do
-                if (rt.Position * Vector3.new(1,0,1) - targetPos * Vector3.new(1,0,1)).Magnitude < 3.5 then
-                    break
-                end
+                if (rt.Position * Vector3.new(1,0,1) - targetPos * Vector3.new(1,0,1)).Magnitude < 3.5 then break end
                 timeOut = timeOut + task.wait(0.1)
             end
-            
-            -- Desativa o Noclip quando chegar no destino
-            if noclipConnection then
-                noclipConnection:Disconnect()
-                logMsg("Noclip desativado.")
-            end
-            
-            logMsg("--- FIM DO TELEPORTE (A PÉ) ---")
         end
     end
 end
@@ -217,19 +171,16 @@ end
 -- =========================================================================
 getgenv().DeliveryLoop = task.spawn(function()
     while task.wait(0.5) do
-        if not getgenv().AutoFarmDelivery then break end
+        if not getgenv().AutoFarmDelivery then continue end
 
         if getgenv().JobPhase == "Init" then
-            local mode = (getgenv().DeliveryMode == "Hard") and "HighRisk" or "Safe"
+            local mode = getgenv().DeliveryMode or "Safe"
             local pad = nil
             for _,v in pairs(ws:GetDescendants()) do
-                if v:IsA("ProximityPrompt") and v.Name == "JobPadPrompt" then
-                    pad = v
-                    break
-                end
+                if v:IsA("ProximityPrompt") and v.Name == "JobPadPrompt" then pad = v; break end
             end
             if pad then
-                logMsg("Iniciando nova rota (" .. mode .. ")")
+                logMsg("Rota iniciada: " .. mode)
                 SmartTeleport(pad.Parent.Position, false)
                 rWait(1, 1.5); fRem("RequestStartJobSession", "Delivery", "jobPad", mode)
                 rWait(1, 1.5); fRem("AttemptDeliveryPickup")
@@ -241,9 +192,7 @@ getgenv().DeliveryLoop = task.spawn(function()
             local t = ws:FindFirstChild("DeliveryTargetAnchor")
             if t and t.Parent == ws then
                 SmartTeleport(t.Position, true)
-                for i = 1, 2 do
-                    fRem("AttemptDeliveryComplete"); task.wait(0.5)
-                end
+                for i = 1, 2 do fRem("AttemptDeliveryComplete"); task.wait(0.5) end
                 rWait(1, 5); fRem("AttemptDeliveryPickup")
                 rWait(7, 16)
             else
