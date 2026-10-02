@@ -280,13 +280,12 @@ getgenv().DeliveryLoop = task.spawn(function()
 
             logMsg("Starting new route (" .. mode .. ") directly from current location")
             
-            -- Dispara o início instantaneamente
             fRem("RequestStartJobSession", "Delivery", "jobPad", mode)
             fRem("AttemptDeliveryPickup")
             
-            -- O TEMPO DE COLETA COMEÇA A CONTAR AQUI (Assim que parou no centro/iniciou)
-            logMsg("Arrived at center. Waiting collection timer...")
-            rWait(4.0, 10.0) 
+            -- TEMPO DE COLETA EXATO (Mínimo 6s, Máximo 10s)
+            logMsg("Arrived at center. Waiting collection timer (6s - 10s)...")
+            rWait(6.0, 10.0) 
             
             getgenv().JobPhase = "Farming"
             
