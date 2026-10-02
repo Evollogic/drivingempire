@@ -10,6 +10,9 @@ end
 if getgenv().NoclipLoop then
     getgenv().NoclipLoop:Disconnect()
 end
+if getgenv().AntiSeatLoop then
+    getgenv().AntiSeatLoop:Disconnect()
+end
 
 getgenv().AutoFarmDelivery = true
 getgenv().JobPhase = "Init"
@@ -26,7 +29,48 @@ local function logMsg(msg)
     end
 end
 
-logMsg("Anti-Fling Engine loaded. Waiting for events...")
+logMsg("Anti-Fling & Anti-Sit Engine loaded. Waiting for events...")
+
+-- =========================================================================
+-- SISTEMA ANTI-SENTADA E ANTI-TRAVA (EMERGÊNCIA)
+-- =========================================================================
+local stuckTick = 0
+getgenv().AntiSeatLoop = game:GetService("RunService").Heartbeat:Connect(function()
+    if not getgenv().AutoFarmDelivery then return end
+    local c = lp.Character
+    if c then
+        local hum = c:FindFirstChildOfClass("Humanoid")
+        if hum then
+            -- Se não estiver dirigindo um veículo válido, proíbe totalmente de sentar
+            if hum.Sit then
+                local seatPart = hum.SeatPart
+                local isDrivingCar = false
+                if seatPart then
+                    local model = seatPart:FindFirstAncestorWhichIsA("Model")
+                    if model and model ~= c then
+                        isDrivingCar = true
+                    end
+                end
+
+                if not isDrivingCar then
+                    hum.Sit = false
+                    hum:ChangeState(Enum.HumanoidStateType.Running)
+                    stuckTick = stuckTick + 1
+                    -- Se ficar travado sentado por mais de 2 segundos seguidos, reseta por segurança
+                    if stuckTick > 120 then
+                        logMsg("WARNING: Character stuck sitting! Forcing emergency reset...")
+                        hum.Health = 0
+                        stuckTick = 0
+                    end
+                else
+                    stuckTick = 0
+                end
+            else
+                stuckTick = 0
+            end
+        end
+    end
+end)
 
 -- =========================================================================
 -- SISTEMA NOCLIP CONTÍNUO (GHOST MODE)
@@ -209,7 +253,6 @@ local function SmartTeleport(targetPos, isDelivery)
             hum.Sit = false
             hum:ChangeState(Enum.HumanoidStateType.Freefall)
 
-            -- Removido wait() demorado, começa a correr quase instantaneamente
             task.wait(0.2)
             hum:ChangeState(Enum.HumanoidStateType.Running)
             hum:MoveTo(targetPos)
@@ -246,8 +289,6 @@ getgenv().DeliveryLoop = task.spawn(function()
             end
             if pad then
                 logMsg("Starting new route (" .. mode .. ") directly from current location")
-                
-                -- Tempos reduzidos (Menos ~4 segundos que o original)
                 rWait(0.5, 1.0); fRem("RequestStartJobSession", "Delivery", "jobPad", mode)
                 rWait(0.5, 1.0); fRem("AttemptDeliveryPickup")
                 rWait(3, 8); getgenv().JobPhase = "Farming"
@@ -256,18 +297,14 @@ getgenv().DeliveryLoop = task.spawn(function()
             end
         elseif getgenv().JobPhase == "Farming" then
             local t = ws:FindFirstChild("DeliveryTargetAnchor")
-            
-            -- Memória adicionada: Ele não faz o script ler e tentar entregar na MESMA âncora que ele acabou de deixar.
             if t and t.Parent == ws and t ~= getgenv().LastAnchor then
                 SmartTeleport(t.Position, true)
                 
-                -- ENTREGA INSTANTÂNEA
                 fRem("AttemptDeliveryComplete")
                 task.wait(0.1)
                 fRem("AttemptDeliveryComplete")
                 task.wait(0.1)
                 
-                -- COLETA A PRÓXIMA E SALVA A ÂNCORA VELHA
                 fRem("AttemptDeliveryPickup")
                 getgenv().LastAnchor = t
             else
