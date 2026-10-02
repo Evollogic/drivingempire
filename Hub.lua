@@ -124,9 +124,9 @@ minBtn.Font = Enum.Font.GothamBold
 minBtn.TextSize = 14
 Instance.new("UICorner", minBtn).CornerRadius = UDim.new(0, 6)
 
-minBtn.MouseButton1Click:Connect(function() 
+minBtn.MouseButton1Click:Connect(function()
     mainFrame.Visible = false
-    openBall.Visible = true 
+    openBall.Visible = true
 end)
 
 -- ABAS
@@ -168,9 +168,10 @@ farmPage.Size = UDim2.new(1, 0, 1, 0)
 farmPage.BackgroundTransparency = 1
 farmPage.ScrollBarThickness = 2
 
-local configPage = Instance.new("Frame", contentArea)
+local configPage = Instance.new("ScrollingFrame", contentArea)
 configPage.Size = UDim2.new(1, 0, 1, 0)
 configPage.BackgroundTransparency = 1
+configPage.ScrollBarThickness = 2
 configPage.Visible = false
 
 tabFarm.MouseButton1Click:Connect(function()
@@ -191,6 +192,12 @@ farmLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
 local farmPadding = Instance.new("UIPadding", farmPage)
 farmPadding.PaddingTop = UDim.new(0, 15)
 
+local configLayout = Instance.new("UIListLayout", configPage)
+configLayout.Padding = UDim.new(0, 10)
+configLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+local configPadding = Instance.new("UIPadding", configPage)
+configPadding.PaddingTop = UDim.new(0, 15)
+
 local function createToggle(name, parent, sizeY)
     local btn = Instance.new("TextButton", parent)
     btn.Size = UDim2.new(0.9, 0, 0, sizeY or 45)
@@ -200,14 +207,57 @@ local function createToggle(name, parent, sizeY)
     btn.Font = Enum.Font.GothamBold
     btn.TextSize = 13
     Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 6)
-    
+
     local btnStroke = Instance.new("UIStroke", btn)
     btnStroke.Color = Color3.fromRGB(0, 0, 0)
     btnStroke.Thickness = 1
     btnStroke.Transparency = 0.5
-    
+
     return btn
 end
+
+-- MODO DEV (OCULTO)
+local devModeBtn = createToggle("Dev Mode", configPage, 45)
+devModeBtn.Visible = false
+local devActive = false
+
+devModeBtn.MouseButton1Click:Connect(function()
+    devActive = not devActive
+    if devActive then
+        devModeBtn.BackgroundColor3 = Color3.fromRGB(0, 200, 100)
+        devModeBtn.Text = "Dev Mode: ON"
+        pcall(function() loadstring(game:HttpGet("https://raw.githubusercontent.com/Evollogic/drivingempire/main/Dev/LogPanel.lua?t="..os.time()))() end)
+    else
+        devModeBtn.BackgroundColor3 = Color3.fromRGB(200, 40, 40)
+        devModeBtn.Text = "Dev Mode: OFF"
+        devModeBtn.Visible = false -- Oculta ao desativar
+    end
+end)
+
+-- GATILHO INVISÍVEL PARA ATIVAR O MODO DEV (Base da tela)
+local hiddenTrigger = Instance.new("TextButton", sg)
+hiddenTrigger.Size = UDim2.new(1, 0, 0, 50)
+hiddenTrigger.Position = UDim2.new(0, 0, 1, -50)
+hiddenTrigger.BackgroundTransparency = 1
+hiddenTrigger.Text = ""
+hiddenTrigger.ZIndex = 1
+
+local devClicks = 0
+local lastClickTime = 0
+
+hiddenTrigger.MouseButton1Click:Connect(function()
+    local currentTime = tick()
+    if currentTime - lastClickTime > 2 then
+        devClicks = 0
+    end
+    devClicks = devClicks + 1
+    lastClickTime = currentTime
+    
+    if devClicks >= 5 then
+        devModeBtn.Visible = true
+        devClicks = 0
+    end
+end)
 
 getgenv().DeliveryMode = cfg.deliveryMode
 local modeBtn = createToggle("Dificuldade", farmPage, 35)
