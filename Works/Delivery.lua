@@ -89,7 +89,8 @@ end)
 -- FUNÇÕES DE SUPORTE
 -- =========================================================================
 local function rWait(min, max)
-    task.wait(math.random(min * 10, max * 10) / 10)
+    local waitTime = math.random(min * 100, max * 100) / 100
+    task.wait(waitTime)
 end
 
 local function fRem(n,...)
@@ -278,16 +279,31 @@ getgenv().DeliveryLoop = task.spawn(function()
             local modeStr = getgenv().DeliveryMode
             local mode = (modeStr == "Hard" or modeStr == "HighRisk") and "HighRisk" or "Safe"
 
-            logMsg("Starting new route (" .. mode .. ") directly from current location")
-            
-            fRem("RequestStartJobSession", "Delivery", "jobPad", mode)
-            fRem("AttemptDeliveryPickup")
-            
-            -- TEMPO DE COLETA AJUSTADO (Mínimo 8s, Máximo 13s)
-            logMsg("Arrived at center. Waiting collection timer (8s - 13s)...")
-            rWait(8.0, 13.0) 
-            
-            getgenv().JobPhase = "Farming"
+            local pad = nil
+            for _,v in pairs(ws:GetDescendants()) do
+                if v:IsA("ProximityPrompt") and v.Name == "JobPadPrompt" then
+                    pad = v
+                    break
+                end
+            end
+            if pad then
+                logMsg("Starting new route (" .. mode .. ") directly from current location")
+                
+                -- O SEGREDO TÁ AQUI: Dar tempo para o servidor processar a sessão antes de pedir a caixa!
+                fRem("RequestStartJobSession", "Delivery", "jobPad", mode)
+                logMsg("Job Session requested. Waiting 2 seconds...")
+                task.wait(2.0)
+                
+                fRem("AttemptDeliveryPickup")
+                
+                local selectedWait = math.random(100, 150) / 10 -- Gera entre 10 e 15 segundos
+                logMsg("Collecting boxes! Waiting timer: " .. selectedWait .. "s...")
+                task.wait(selectedWait) 
+                
+                getgenv().JobPhase = "Farming"
+            else
+                task.wait(2)
+            end
             
         elseif getgenv().JobPhase == "Farming" then
             local t = ws:FindFirstChild("DeliveryTargetAnchor")
@@ -295,17 +311,19 @@ getgenv().DeliveryLoop = task.spawn(function()
                 if t ~= getgenv().LastAnchor then
                     SmartTeleport(t.Position, true)
                     
-                    -- ENTREGA INSTANTÂNEA E PERFEITA (Inalterada)
+                    -- ENTREGA INSTANTÂNEA
                     fRem("AttemptDeliveryComplete")
-                    task.wait(0.1)
+                    task.wait(0.2)
                     fRem("AttemptDeliveryComplete")
-                    task.wait(0.1)
+                    task.wait(0.3)
                     
+                    -- COLETA A PRÓXIMA CAIXA
                     fRem("AttemptDeliveryPickup")
                     getgenv().LastAnchor = t
                     
+                    -- Limpa a memória pra não bugar na próxima casa
                     task.spawn(function()
-                        task.wait(1.5)
+                        task.wait(2.0)
                         if getgenv().LastAnchor == t then
                             getgenv().LastAnchor = nil
                         end
