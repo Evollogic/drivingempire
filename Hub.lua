@@ -35,7 +35,7 @@ pcall(function() sg.Parent = coreGui end)
 if not sg.Parent then sg.Parent = playerGui end                         
 
 -- ==========================================
--- SISTEMA DE NOTIFICAÇÃO (DEV MODE)
+-- SISTEMA DE NOTIFICAÇÃO
 -- ==========================================
 local notifFrame = Instance.new("Frame", sg)
 notifFrame.Size = UDim2.new(0, 220, 0, 40)
@@ -71,17 +71,18 @@ local function ShowNotification(msg, color)
 end
 
 -- ==========================================
--- TERMINAL DE DEBUG (DEV MODE INVISÍVEL)
+-- VARIÁVEIS DO DEV MODE
 -- ==========================================
 if getgenv().DevMode == nil then getgenv().DevMode = false end
+local isLogOpen = false
 
 local termFrame = Instance.new("Frame", sg)
 termFrame.Size = UDim2.new(0, 320, 0, 280)
 termFrame.Position = UDim2.new(1, -340, 0, 20)
 termFrame.BackgroundColor3 = Color3.fromRGB(15, 15, 18)
-termFrame.Visible = getgenv().DevMode
+termFrame.Visible = false
 termFrame.Active = true
-termFrame.Draggable = false -- Desativado o nativo para usar nosso custom drag
+termFrame.Draggable = false
 Instance.new("UICorner", termFrame).CornerRadius = UDim.new(0, 6)
 Instance.new("UIStroke", termFrame).Color = Color3.fromRGB(80, 80, 90)
 
@@ -158,13 +159,8 @@ termCopyBtn.MouseButton1Click:Connect(function()
     end
 end)
 
-termCloseBtn.MouseButton1Click:Connect(function()
-    -- Fecha apenas visualmente, não desliga o Dev Mode!
-    termFrame.Visible = false
-end)
-
 -- ==========================================
--- BOTAO FLUTUANTE (HAMBÚRGUER)
+-- HAMBÚRGUER
 -- ==========================================
 local openBall = Instance.new("TextButton")                             
 openBall.Size = UDim2.new(0, 45, 0, 45)
@@ -182,7 +178,7 @@ ballStroke.Color = Color3.fromRGB(0, 255, 255)
 ballStroke.Thickness = 2.5
 
 -- ==========================================
--- JANELA PRINCIPAL (TEMA ESCURO FUTURISTA)
+-- JANELA PRINCIPAL
 -- ==========================================
 local mainFrame = Instance.new("Frame")
 mainFrame.Size = UDim2.new(0, 220, 0, 380)                              
@@ -251,7 +247,7 @@ Instance.new("UICorner", minBtn).CornerRadius = UDim.new(0, 6)
 
 minBtn.MouseButton1Click:Connect(function()
     mainFrame.Visible = false
-    termFrame.Visible = false -- Oculta ambos simultaneamente
+    termFrame.Visible = false
 end)                                                                    
 
 local tabContainer = Instance.new("Frame", mainFrame)
@@ -339,21 +335,51 @@ local function createToggle(name, parent, sizeY)
 end
 
 -- ==========================================
--- SETTINGS: BOTÃO DEV MODE
+-- SETTINGS: BOTÃO DEV MODE E LOGS
 -- ==========================================
 local devToggleBtn = createToggle("Dev Mode", configPage, 45)
+local logToggleBtn = createToggle("Terminal Logs", configPage, 40)
+
 devToggleBtn.Visible = getgenv().DevMode
+logToggleBtn.Visible = getgenv().DevMode
+
 if getgenv().DevMode then
     devToggleBtn.BackgroundColor3 = Color3.fromRGB(0, 200, 100)
     devToggleBtn.Text = "Dev Mode: ON"
+    
+    isLogOpen = true
+    logToggleBtn.BackgroundColor3 = Color3.fromRGB(0, 200, 100)
+    logToggleBtn.Text = "Terminal Logs: ON"
 end
 
 devToggleBtn.MouseButton1Click:Connect(function()
-    -- Este sim desativa totalmente o Dev Mode!
     getgenv().DevMode = false
+    isLogOpen = false
     termFrame.Visible = false
-    devToggleBtn.Visible = false -- Fica invisível até desbloquear de novo
+    devToggleBtn.Visible = false 
+    logToggleBtn.Visible = false
     ShowNotification("❌ Dev Mode DISABLED!", Color3.fromRGB(255, 100, 100))
+end)
+
+logToggleBtn.MouseButton1Click:Connect(function()
+    isLogOpen = not isLogOpen
+    if isLogOpen then
+        logToggleBtn.BackgroundColor3 = Color3.fromRGB(0, 200, 100)
+        logToggleBtn.Text = "Terminal Logs: ON"
+        termFrame.Visible = mainFrame.Visible
+    else
+        logToggleBtn.BackgroundColor3 = Color3.fromRGB(200, 40, 40)
+        logToggleBtn.Text = "Terminal Logs: OFF"
+        termFrame.Visible = false
+    end
+end)
+
+termCloseBtn.MouseButton1Click:Connect(function()
+    -- Fecha e atualiza o estado do botão
+    isLogOpen = false
+    termFrame.Visible = false
+    logToggleBtn.BackgroundColor3 = Color3.fromRGB(200, 40, 40)
+    logToggleBtn.Text = "Terminal Logs: OFF"
 end)
 
 -- ==========================================
@@ -408,7 +434,7 @@ end)
 if getgenv().AutoFarmDelivery then task.spawn(function() if not lp.Character then lp.CharacterAdded:Wait() end task.wait(1) updateDeliveryUI() end) end
 
 -- ==========================================
--- SISTEMA DE ARRASTO SEPARADO (HUB vs TERM)
+-- SISTEMA DE ARRASTO E CLIQUES
 -- ==========================================
 local ballDragging, ballDragStart, ballStartPos = false, nil, nil
 
@@ -423,7 +449,6 @@ local termFrameStartPos = nil
 local devClickCount = 0
 local lastClickTime = 0
 
--- Captura do Hub Principal
 local function onHubInputBegan(input)
     if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
         mainFrameDragging = true
@@ -433,7 +458,6 @@ local function onHubInputBegan(input)
 end
 topBar.InputBegan:Connect(onHubInputBegan)
 
--- Captura do Terminal Independente
 termTop.InputBegan:Connect(function(input)
     if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
         termFrameDragging = true
@@ -491,7 +515,6 @@ uis.InputEnded:Connect(function(input)
             ballDragging = false
             local delta = input.Position - ballDragStart
             
-            -- Detecta CLIQUE no Hambúrguer
             if delta.Magnitude < 5 then
                 local currentTime = tick()
                 if currentTime - lastClickTime > 1.2 then devClickCount = 0 end
@@ -513,16 +536,26 @@ uis.InputEnded:Connect(function(input)
 
                     if not getgenv().DevMode then
                         getgenv().DevMode = true
+                        
                         devToggleBtn.Visible = true
                         devToggleBtn.BackgroundColor3 = Color3.fromRGB(0, 200, 100)
                         devToggleBtn.Text = "Dev Mode: ON"
+
+                        logToggleBtn.Visible = true
+                        isLogOpen = true
+                        logToggleBtn.BackgroundColor3 = Color3.fromRGB(0, 200, 100)
+                        logToggleBtn.Text = "Terminal Logs: ON"
+
                         ShowNotification("🐛 Dev Mode ENABLED!", Color3.fromRGB(100, 255, 100))
                     end
-                    termFrame.Visible = true -- Reabre a janela se estivesse fechada
+                    termFrame.Visible = true
                 else
                     mainFrame.Visible = not mainFrame.Visible
-                    if getgenv().DevMode then
+                    -- Lógica de abrir/fechar o terminal junto com o hub APENAS se o botão do Log estiver ON
+                    if getgenv().DevMode and isLogOpen then
                         termFrame.Visible = mainFrame.Visible
+                    else
+                        termFrame.Visible = false
                     end
                 end
             end

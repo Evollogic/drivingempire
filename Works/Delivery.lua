@@ -254,15 +254,16 @@ getgenv().DeliveryLoop = task.spawn(function()
             if t and t.Parent == ws then
                 SmartTeleport(t.Position, true)
                 
-                -- ENTREGA EXPRESSA (Máximo de 1 segundo de intervalo)
+                -- ENTREGA EXPRESSA (Menos de 1 segundo)
                 fRem("AttemptDeliveryComplete")
                 task.wait(0.2)
-                fRem("AttemptDeliveryComplete") -- Dispara de novo por garantia
+                fRem("AttemptDeliveryComplete")
                 task.wait(0.3)
                 
-                -- Coleta a próxima caixa
+                -- COLETA PADRÃO (Respeita o delay original para pegar a próxima caixa)
+                rWait(1, 5)
                 fRem("AttemptDeliveryPickup")
-                task.wait(0.5) 
+                rWait(7, 16)
             else
                 task.wait(1)
             end
