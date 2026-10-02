@@ -280,10 +280,15 @@ getgenv().DeliveryLoop = task.spawn(function()
 
             logMsg("Starting new route (" .. mode .. ") directly from current location")
             
-            -- TEMPO DE COLETA AUMENTADO E SEGURO (Entre 4 e 10 segundos)
-            rWait(1.0, 2.0); fRem("RequestStartJobSession", "Delivery", "jobPad", mode)
-            rWait(1.0, 2.0); fRem("AttemptDeliveryPickup")
-            rWait(4, 10); getgenv().JobPhase = "Farming"
+            -- Dispara o início instantaneamente
+            fRem("RequestStartJobSession", "Delivery", "jobPad", mode)
+            fRem("AttemptDeliveryPickup")
+            
+            -- O TEMPO DE COLETA COMEÇA A CONTAR AQUI (Assim que parou no centro/iniciou)
+            logMsg("Arrived at center. Waiting collection timer...")
+            rWait(4.0, 10.0) 
+            
+            getgenv().JobPhase = "Farming"
             
         elseif getgenv().JobPhase == "Farming" then
             local t = ws:FindFirstChild("DeliveryTargetAnchor")
@@ -291,7 +296,7 @@ getgenv().DeliveryLoop = task.spawn(function()
                 if t ~= getgenv().LastAnchor then
                     SmartTeleport(t.Position, true)
                     
-                    -- ENTREGA PERFEITA E RÁPIDA (Inalterada)
+                    -- ENTREGA INSTANTÂNEA E PERFEITA (Inalterada)
                     fRem("AttemptDeliveryComplete")
                     task.wait(0.1)
                     fRem("AttemptDeliveryComplete")
