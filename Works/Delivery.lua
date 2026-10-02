@@ -41,7 +41,6 @@ getgenv().AntiSeatLoop = game:GetService("RunService").Heartbeat:Connect(functio
     if c then
         local hum = c:FindFirstChildOfClass("Humanoid")
         if hum then
-            -- Se não estiver dirigindo um veículo válido, proíbe totalmente de sentar
             if hum.Sit then
                 local seatPart = hum.SeatPart
                 local isDrivingCar = false
@@ -56,7 +55,6 @@ getgenv().AntiSeatLoop = game:GetService("RunService").Heartbeat:Connect(functio
                     hum.Sit = false
                     hum:ChangeState(Enum.HumanoidStateType.Running)
                     stuckTick = stuckTick + 1
-                    -- Se ficar travado sentado por mais de 2 segundos seguidos, reseta por segurança
                     if stuckTick > 120 then
                         logMsg("WARNING: Character stuck sitting! Forcing emergency reset...")
                         hum.Health = 0
@@ -297,16 +295,26 @@ getgenv().DeliveryLoop = task.spawn(function()
             end
         elseif getgenv().JobPhase == "Farming" then
             local t = ws:FindFirstChild("DeliveryTargetAnchor")
-            if t and t.Parent == ws and t ~= getgenv().LastAnchor then
-                SmartTeleport(t.Position, true)
-                
-                fRem("AttemptDeliveryComplete")
-                task.wait(0.1)
-                fRem("AttemptDeliveryComplete")
-                task.wait(0.1)
-                
-                fRem("AttemptDeliveryPickup")
-                getgenv().LastAnchor = t
+            if t and t.Parent == ws then
+                if t ~= getgenv().LastAnchor then
+                    SmartTeleport(t.Position, true)
+                    
+                    fRem("AttemptDeliveryComplete")
+                    task.wait(0.1)
+                    fRem("AttemptDeliveryComplete")
+                    task.wait(0.1)
+                    
+                    fRem("AttemptDeliveryPickup")
+                    getgenv().LastAnchor = t
+                    
+                    -- Limpa a memória após um breve instante para permitir a próxima âncora gerar
+                    task.spawn(function()
+                        task.wait(1.5)
+                        if getgenv().LastAnchor == t then
+                            getgenv().LastAnchor = nil
+                        end
+                    end)
+                end
             else
                 task.wait(0.1)
             end
