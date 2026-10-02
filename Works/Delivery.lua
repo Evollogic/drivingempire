@@ -118,7 +118,6 @@ local function SmartTeleport(targetPos, isDelivery)
             dir = (flatCurrent - flatTarget).Unit
         end
 
-        -- Limite restaurado com aleatoriedade (85 a 100 studs) para entrar de fora da área
         local carOffset = math.random(85, 100)
         local startPos = Vector3.new(targetPos.X + (dir.X * carOffset), targetPos.Y + 5, targetPos.Z + (dir.Z * carOffset))
         local lookAt = Vector3.new(targetPos.X, startPos.Y, targetPos.Z)
@@ -185,7 +184,6 @@ local function SmartTeleport(targetPos, isDelivery)
     else
         logMsg("Mode: ON FOOT. Calculating Raycast...")
         if rt and hum then
-            -- Limite restaurado com aleatoriedade (35 a 45 studs)
             local charOffset = math.random(35, 45)
             local outOffset = Vector3.new(charOffset, 0, 0)
             local approachPosCenter = targetPos + outOffset
@@ -245,11 +243,13 @@ getgenv().DeliveryLoop = task.spawn(function()
                 end
             end
             if pad then
-                logMsg("Starting new route (" .. mode .. ")")
-                SmartTeleport(pad.Parent.Position, false)
-                rWait(1, 1.5); fRem("RequestStartJobSession", "Delivery", "jobPad", mode)
-                rWait(1, 1.5); fRem("AttemptDeliveryPickup")
-                rWait(7, 16); getgenv().JobPhase = "Farming"
+                -- Removido o SmartTeleport(pad.Parent.Position). Agora ele começa direto da posição atual!
+                logMsg("Starting new route (" .. mode .. ") directly from current location")
+                
+                -- Tempos reduzidos para no máximo 15 segundos no total
+                rWait(0.5, 1.5); fRem("RequestStartJobSession", "Delivery", "jobPad", mode)
+                rWait(0.5, 1.5); fRem("AttemptDeliveryPickup")
+                rWait(5, 12); getgenv().JobPhase = "Farming"
             else
                 task.wait(2)
             end
@@ -264,10 +264,9 @@ getgenv().DeliveryLoop = task.spawn(function()
                 fRem("AttemptDeliveryComplete")
                 task.wait(0.3)
                 
-                -- COLETA PADRÃO (Respeita o delay original para pegar a próxima caixa)
-                rWait(1, 5)
+                -- COLETA PADRÃO (Puxa a nova caixa e já parte)
                 fRem("AttemptDeliveryPickup")
-                rWait(7, 16)
+                task.wait(0.5)
             else
                 task.wait(1)
             end
