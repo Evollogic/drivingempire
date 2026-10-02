@@ -71,6 +71,99 @@ local function ShowNotification(msg, color)
 end
 
 -- ==========================================
+-- TERMINAL DE DEBUG (DEV MODE INVISÍVEL)
+-- ==========================================
+getgenv().DevMode = false
+local termFrame = Instance.new("Frame", sg)
+termFrame.Size = UDim2.new(0, 320, 0, 280)
+termFrame.Position = UDim2.new(1, -340, 0, 20)
+termFrame.BackgroundColor3 = Color3.fromRGB(15, 15, 18)
+termFrame.Visible = false
+termFrame.Active = true
+termFrame.Draggable = true
+Instance.new("UICorner", termFrame).CornerRadius = UDim.new(0, 6)
+Instance.new("UIStroke", termFrame).Color = Color3.fromRGB(80, 80, 90)
+
+local termTop = Instance.new("Frame", termFrame)
+termTop.Size = UDim2.new(1, 0, 0, 35)
+termTop.BackgroundColor3 = Color3.fromRGB(20, 20, 25)
+termTop.BorderSizePixel = 0
+Instance.new("UICorner", termTop).CornerRadius = UDim.new(0, 6)
+
+local termTitle = Instance.new("TextLabel", termTop)
+termTitle.Size = UDim2.new(0.5, 0, 1, 0)
+termTitle.Position = UDim2.new(0, 10, 0, 0)
+termTitle.BackgroundTransparency = 1
+termTitle.Text = "📟 Logs"
+termTitle.TextColor3 = Color3.fromRGB(100, 255, 100)
+termTitle.Font = Enum.Font.GothamBold
+termTitle.TextSize = 14
+termTitle.TextXAlignment = Enum.TextXAlignment.Left
+
+local termCopyBtn = Instance.new("TextButton", termTop)
+termCopyBtn.Size = UDim2.new(0, 60, 0, 25)
+termCopyBtn.Position = UDim2.new(1, -105, 0, 5)
+termCopyBtn.BackgroundColor3 = Color3.fromRGB(50, 120, 50)
+termCopyBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+termCopyBtn.Font = Enum.Font.GothamBold
+termCopyBtn.TextSize = 12
+termCopyBtn.Text = "COPY"
+Instance.new("UICorner", termCopyBtn).CornerRadius = UDim.new(0, 4)
+
+local termCloseBtn = Instance.new("TextButton", termTop)
+termCloseBtn.Size = UDim2.new(0, 30, 0, 25)
+termCloseBtn.Position = UDim2.new(1, -35, 0, 5)
+termCloseBtn.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
+termCloseBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+termCloseBtn.Font = Enum.Font.GothamBold
+termCloseBtn.TextSize = 12
+termCloseBtn.Text = "X"
+Instance.new("UICorner", termCloseBtn).CornerRadius = UDim.new(0, 4)
+
+local termScroll = Instance.new("ScrollingFrame", termFrame)
+termScroll.Size = UDim2.new(1, -10, 1, -45)
+termScroll.Position = UDim2.new(0, 5, 0, 40)
+termScroll.BackgroundTransparency = 1
+termScroll.CanvasSize = UDim2.new(0, 0, 0, 0)
+termScroll.AutomaticCanvasSize = Enum.AutomaticSize.Y
+termScroll.ScrollBarThickness = 4
+local termList = Instance.new("UIListLayout", termScroll)
+
+local allLogs = {}
+
+getgenv().LogMsg = function(msg)
+    if not getgenv().DevMode then return end
+    local t = os.date("%H:%M:%S") .. " | " .. tostring(msg)
+    table.insert(allLogs, t)
+    
+    local txt = Instance.new("TextLabel", termScroll)
+    txt.Size = UDim2.new(1, 0, 0, 0)
+    txt.AutomaticSize = Enum.AutomaticSize.Y
+    txt.BackgroundTransparency = 1
+    txt.TextColor3 = Color3.fromRGB(180, 180, 180)
+    txt.TextSize = 12
+    txt.TextXAlignment = Enum.TextXAlignment.Left
+    txt.TextWrapped = true
+    txt.Text = t
+    termScroll.CanvasPosition = Vector2.new(0, termScroll.AbsoluteWindowSize.Y + 9999)
+end
+
+termCopyBtn.MouseButton1Click:Connect(function()
+    if setclipboard then
+        setclipboard(table.concat(allLogs, "\n"))
+        termCopyBtn.Text = "OK!"
+        task.wait(1)
+        termCopyBtn.Text = "COPY"
+    end
+end)
+
+termCloseBtn.MouseButton1Click:Connect(function()
+    termFrame.Visible = false
+    getgenv().DevMode = false
+    ShowNotification("❌ Dev Mode DISABLED!", Color3.fromRGB(255, 100, 100))
+end)
+
+-- ==========================================
 -- BOTAO FLUTUANTE (HAMBÚRGUER)
 -- ==========================================
 local openBall = Instance.new("TextButton")                             
@@ -78,7 +171,7 @@ openBall.Size = UDim2.new(0, 45, 0, 45)
 openBall.Position = UDim2.new(0, 10, 0.5, -22)
 openBall.BackgroundColor3 = Color3.fromRGB(15, 15, 20)
 openBall.BackgroundTransparency = 0.2
-openBall.Text = "🍔" -- Emoji Hambúrguer
+openBall.Text = "🍔"
 openBall.TextSize = 25
 openBall.BorderSizePixel = 0
 openBall.Visible = true
@@ -104,7 +197,6 @@ mainFrame.Parent = sg
 local mainCorner = Instance.new("UICorner", mainFrame)
 mainCorner.CornerRadius = UDim.new(0, 12)
 
--- EFEITO GLOW (NÉON ROTATIVO) NAS BORDAS
 local mainStroke = Instance.new("UIStroke", mainFrame)
 mainStroke.Thickness = 2.5
 mainStroke.Transparency = 0
@@ -123,7 +215,6 @@ task.spawn(function()
     end
 end)                                                                    
 
--- BARRA SUPERIOR                                                       
 local topBar = Instance.new("Frame", mainFrame)
 topBar.Size = UDim2.new(1, 0, 0, 35)
 topBar.BackgroundColor3 = Color3.fromRGB(15, 15, 20)
@@ -157,11 +248,12 @@ minBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
 minBtn.Font = Enum.Font.GothamBold
 minBtn.TextSize = 14
 Instance.new("UICorner", minBtn).CornerRadius = UDim.new(0, 6)
+
 minBtn.MouseButton1Click:Connect(function()
     mainFrame.Visible = false
+    termFrame.Visible = false -- Fecha o log junto com o hub
 end)                                                                    
 
--- ABAS (Em Inglês)
 local tabContainer = Instance.new("Frame", mainFrame)
 tabContainer.Size = UDim2.new(1, 0, 0, 35)
 tabContainer.Position = UDim2.new(0, 0, 0, 35)
@@ -239,9 +331,6 @@ local function createToggle(name, parent, sizeY)
     return btn
 end
 
--- ==========================================
--- BOTÕES DE FARM E MODO EM INGLÊS
--- ==========================================
 local deliveryToggleBtn = createToggle("Auto Delivery", farmPage, 45)
 getgenv().AutoFarmDelivery = cfg.delivery
 getgenv().DeliveryInitialPosition = nil
@@ -250,7 +339,7 @@ getgenv().DeliveryMode = cfg.deliveryMode
 local modeBtn = createToggle("Difficulty", farmPage, 35)
 modeBtn.Text = "Mode: " .. cfg.deliveryMode
 modeBtn.BackgroundColor3 = cfg.deliveryMode == "Easy" and Color3.fromRGB(0, 200, 100) or Color3.fromRGB(200, 100, 0)
-modeBtn.Visible = cfg.delivery -- Começa invisível se Auto Delivery estiver OFF
+modeBtn.Visible = cfg.delivery 
 
 modeBtn.MouseButton1Click:Connect(function()
     getgenv().DeliveryMode = getgenv().DeliveryMode == "Easy" and "Hard" or "Easy"
@@ -266,14 +355,14 @@ local function updateDeliveryUI()
     if getgenv().AutoFarmDelivery then
         deliveryToggleBtn.BackgroundColor3 = Color3.fromRGB(0, 200, 100)
         deliveryToggleBtn.Text = "Auto Delivery: ON"
-        modeBtn.Visible = true -- Aparece ao ligar
+        modeBtn.Visible = true 
         local root = getRoot()
         if root then getgenv().DeliveryInitialPosition = root.CFrame end
         pcall(function() loadstring(game:HttpGet("https://raw.githubusercontent.com/Evollogic/drivingempire/main/Works/Delivery.lua?t="..os.time()))() end)
     else
         deliveryToggleBtn.BackgroundColor3 = Color3.fromRGB(200, 40, 40)
         deliveryToggleBtn.Text = "Auto Delivery: OFF"
-        modeBtn.Visible = false -- Esconde ao desligar
+        modeBtn.Visible = false 
         local root = getRoot()
         if root and getgenv().DeliveryInitialPosition then
             root.Velocity, root.AssemblyLinearVelocity = Vector3.new(0,0,0), Vector3.new(0,0,0)
@@ -291,42 +380,6 @@ end)
 if getgenv().AutoFarmDelivery then task.spawn(function() if not lp.Character then lp.CharacterAdded:Wait() end task.wait(1) updateDeliveryUI() end) end
 
 -- ==========================================
--- TERMINAL DE DEBUG (DEV MODE INVISÍVEL)
--- ==========================================
-getgenv().DevMode = false
-local termFrame = Instance.new("Frame", sg)
-termFrame.Size = UDim2.new(0, 300, 0, 250)
-termFrame.Position = UDim2.new(1, -320, 0, 20)
-termFrame.BackgroundColor3 = Color3.fromRGB(15, 15, 18)
-termFrame.Visible = false
-termFrame.Active = true
-termFrame.Draggable = true
-Instance.new("UICorner", termFrame).CornerRadius = UDim.new(0, 6)
-Instance.new("UIStroke", termFrame).Color = Color3.fromRGB(80, 80, 90)
-
-local termScroll = Instance.new("ScrollingFrame", termFrame)
-termScroll.Size = UDim2.new(1, -10, 1, -10)
-termScroll.Position = UDim2.new(0, 5, 0, 5)
-termScroll.BackgroundTransparency = 1
-termScroll.CanvasSize = UDim2.new(0, 0, 0, 0)
-termScroll.AutomaticCanvasSize = Enum.AutomaticSize.Y
-local termList = Instance.new("UIListLayout", termScroll)
-
-getgenv().LogMsg = function(msg)
-    if not getgenv().DevMode then return end
-    local txt = Instance.new("TextLabel", termScroll)
-    txt.Size = UDim2.new(1, 0, 0, 0)
-    txt.AutomaticSize = Enum.AutomaticSize.Y
-    txt.BackgroundTransparency = 1
-    txt.TextColor3 = Color3.fromRGB(180, 180, 180)
-    txt.TextSize = 12
-    txt.TextXAlignment = Enum.TextXAlignment.Left
-    txt.TextWrapped = true
-    txt.Text = os.date("%H:%M:%S") .. " | " .. tostring(msg)
-    termScroll.CanvasPosition = Vector2.new(0, termScroll.AbsoluteWindowSize.Y + 9999)
-end
-
--- ==========================================
 -- SISTEMA ABSOLUTO DE ARRASTO E CLIQUES
 -- ==========================================
 local ballDragging = false
@@ -340,7 +393,6 @@ local hubStartPos = nil
 local devClickCount = 0
 local lastClickTime = 0
 
--- Função de captura para o Hub
 local function onHubInputBegan(input)
     if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
         hubDragging = true
@@ -350,6 +402,13 @@ local function onHubInputBegan(input)
 end
 
 topBar.InputBegan:Connect(onHubInputBegan)
+termTop.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+        hubDragging = true
+        hubDragStart = input.Position
+        hubStartPos = termFrame.Position
+    end
+end)
 
 local function createDragBorder(size, pos)
     local border = Instance.new("TextButton", mainFrame)
@@ -366,7 +425,6 @@ createDragBorder(UDim2.new(1, 30, 0, 20), UDim2.new(0, -15, 1, -5))
 createDragBorder(UDim2.new(0, 20, 1, -30), UDim2.new(0, -15, 0, 15))
 createDragBorder(UDim2.new(0, 20, 1, -30), UDim2.new(1, -5, 0, 15))     
 
--- Iniciar arrasto da bolinha
 openBall.InputBegan:Connect(function(input)
     if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
         ballDragging = true
@@ -383,7 +441,11 @@ uis.InputChanged:Connect(function(input)
         end
         if hubDragging then
             local delta = input.Position - hubDragStart
-            mainFrame.Position = UDim2.new(hubStartPos.X.Scale, hubStartPos.X.Offset + delta.X, hubStartPos.Y.Scale, hubStartPos.Y.Offset + delta.Y)
+            if hubStartPos == mainFrame.Position then
+                mainFrame.Position = UDim2.new(hubStartPos.X.Scale, hubStartPos.X.Offset + delta.X, hubStartPos.Y.Scale, hubStartPos.Y.Offset + delta.Y)
+            else
+                termFrame.Position = UDim2.new(hubStartPos.X.Scale, hubStartPos.X.Offset + delta.X, hubStartPos.Y.Scale, hubStartPos.Y.Offset + delta.Y)
+            end
         end
     end
 end)                                                                    
@@ -394,14 +456,12 @@ uis.InputEnded:Connect(function(input)
             ballDragging = false
             local delta = input.Position - ballDragStart
             
-            -- Detecta CLIQUE no Hambúrguer
             if delta.Magnitude < 5 then
                 local currentTime = tick()
                 if currentTime - lastClickTime > 1.2 then devClickCount = 0 end
                 lastClickTime = currentTime
                 devClickCount = devClickCount + 1
 
-                -- Animação de Rotação
                 local tilt = (devClickCount % 2 == 0) and 15 or -15
                 if devClickCount == 5 then tilt = 360 end
                 ts:Create(openBall, TweenInfo.new(0.1), {Rotation = tilt}):Play()
@@ -411,7 +471,6 @@ uis.InputEnded:Connect(function(input)
                     if devClickCount < 5 then ts:Create(openBall, TweenInfo.new(0.1), {Rotation = 0}):Play() end
                 end)
 
-                -- Lógica dos 5 Cliques
                 if devClickCount >= 5 then
                     devClickCount = 0
                     getgenv().DevMode = not getgenv().DevMode
@@ -424,8 +483,10 @@ uis.InputEnded:Connect(function(input)
                     end
                     ts:Create(openBall, TweenInfo.new(0.1), {Rotation = 0}):Play()
                 else
-                    -- Primeiro clique normal: Abre/Fecha o Menu
                     mainFrame.Visible = not mainFrame.Visible
+                    if getgenv().DevMode then
+                        termFrame.Visible = mainFrame.Visible
+                    end
                 end
             end
         end
@@ -433,7 +494,6 @@ uis.InputEnded:Connect(function(input)
     end
 end)
 
--- CHAMADAS DOS SCRIPTS AUTOMÁTICOS
 task.spawn(function()
     if not getgenv().AutoClaimRunning then
         getgenv().AutoClaimRunning = true
