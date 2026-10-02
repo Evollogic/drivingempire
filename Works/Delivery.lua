@@ -9,13 +9,13 @@ if getgenv().NoclipLoop then getgenv().NoclipLoop:Disconnect() end
 
 getgenv().JobPhase = "Init"
 
--- Função de Log conectada ao Hub
+-- Log function connected to Hub
 local function logMsg(msg)
     if getgenv().LogMsg then getgenv().LogMsg(msg) else print("Delivery: " .. tostring(msg)) end
 end
 
 -- =========================================================================
--- SISTEMA DE NOCLIP CONTÍNUO (GHOST MODE)
+-- CONTINUOUS NOCLIP SYSTEM (GHOST MODE)
 -- =========================================================================
 getgenv().NoclipLoop = game:GetService("RunService").Stepped:Connect(function()
     if not getgenv().AutoFarmDelivery then return end
@@ -30,7 +30,7 @@ getgenv().NoclipLoop = game:GetService("RunService").Stepped:Connect(function()
 end)
 
 -- =========================================================================
--- FUNÇÕES DE SUPORTE
+-- SUPPORT FUNCTIONS
 -- =========================================================================
 local function rWait(min, max) task.wait(math.random(min * 10, max * 10) / 10) end
 
@@ -49,29 +49,29 @@ local function getChar()
     return c, (c and c:FindFirstChild("HumanoidRootPart")), (c and c:FindFirstChild("Humanoid"))
 end
 
-local function simularBotao(nomeBotao, pressionar)
-    local btn = lp.PlayerGui:FindFirstChild(nomeBotao, true)
+local function simulateButton(buttonName, press)
+    local btn = lp.PlayerGui:FindFirstChild(buttonName, true)
     if btn then
         pcall(function()
             local vim = game:GetService("VirtualInputManager")
-            local centroX = btn.AbsolutePosition.X + (btn.AbsoluteSize.X / 2)
-            local centroY = btn.AbsolutePosition.Y + (btn.AbsoluteSize.Y / 2)
-            vim:SendMouseButtonEvent(centroX, centroY, 0, pressionar, game, 0)
+            local centerX = btn.AbsolutePosition.X + (btn.AbsoluteSize.X / 2)
+            local centerY = btn.AbsolutePosition.Y + (btn.AbsoluteSize.Y / 2)
+            vim:SendMouseButtonEvent(centerX, centerY, 0, press, game, 0)
         end)
         if getconnections then
-            local estado = pressionar and Enum.UserInputState.Begin or Enum.UserInputState.End
-            for _, conn in pairs(getconnections(pressionar and btn.InputBegan or btn.InputEnded)) do
-                pcall(function() conn.Function({UserInputType = Enum.UserInputType.Touch, UserInputState = estado}) end)
+            local state = press and Enum.UserInputState.Begin or Enum.UserInputState.End
+            for _, conn in pairs(getconnections(press and btn.InputBegan or btn.InputEnded)) do
+                pcall(function() conn.Function({UserInputType = Enum.UserInputType.Touch, UserInputState = state}) end)
             end
         end
     end
 end
 
 -- =========================================================================
--- FUNÇÃO DE TELEPORTE SMART COM FORCE-HOLD
+-- SMART TELEPORT WITH FORCE-HOLD
 -- =========================================================================
 local function SmartTeleport(targetPos, isDelivery)
-    logMsg("Alvo Pos: " .. tostring(targetPos))
+    logMsg("Target Pos: " .. tostring(targetPos))
 
     local c, rt, hum = getChar()
     local car = nil
@@ -82,21 +82,22 @@ local function SmartTeleport(targetPos, isDelivery)
     end
 
     if car then
-        logMsg("Modo VEÍCULO. Ghost Mode Aplicado.")
+        logMsg("VEHICLE Mode. Ghost Mode Applied.")
         local cPart = car.PrimaryPart or car:FindFirstChildWhichIsA("BasePart", true)
         local allVehicleParts = cPart:GetConnectedParts(true)
         local currentPivot = car:GetPivot()
 
         local flatCurrent = Vector3.new(currentPivot.Position.X, 0, currentPivot.Position.Z)
         local flatTarget = Vector3.new(targetPos.X, 0, targetPos.Z)
+        local dist = (flatCurrent - flatTarget).Magnitude
         local dir = (dist > 1) and (flatCurrent - flatTarget).Unit or Vector3.new(1, 0, 0)
 
         local startPos = Vector3.new(targetPos.X + (dir.X * 25), targetPos.Y + 5, targetPos.Z + (dir.Z * 25))
         local destCFrame = CFrame.new(startPos, Vector3.new(targetPos.X, startPos.Y, targetPos.Z))
 
-        local estadosColisao = {}
+        local collisionStates = {}
         for _, p in pairs(allVehicleParts) do
-            estadosColisao[p] = p.CanCollide
+            collisionStates[p] = p.CanCollide
             local n = p.Name:lower()
             if not (n:match("wheel") or n:match("tire") or n:match("rim") or n:match("suspension") or n:match("whl")) then
                 p.CanCollide = false
@@ -112,9 +113,9 @@ local function SmartTeleport(targetPos, isDelivery)
             task.wait()
         end
 
-        simularBotao("Left", false)
-        simularBotao("Right", false)
-        simularBotao("Throttle", true)
+        simulateButton("Left", false)
+        simulateButton("Right", false)
+        simulateButton("Throttle", true)
 
         local timeOut = 0
         while timeOut < 6 do
@@ -128,16 +129,16 @@ local function SmartTeleport(targetPos, isDelivery)
             timeOut = timeOut + task.wait(0.1)
         end
 
-        simularBotao("Throttle", false)
-        simularBotao("Brake", true)
+        simulateButton("Throttle", false)
+        simulateButton("Brake", true)
         task.wait(0.8)
-        simularBotao("Brake", false)
+        simulateButton("Brake", false)
 
         for _, p in pairs(allVehicleParts) do
-            if estadosColisao[p] ~= nil then p.CanCollide = estadosColisao[p] end
+            if collisionStates[p] ~= nil then p.CanCollide = collisionStates[p] end
         end
     else
-        logMsg("Modo A PÉ.")
+        logMsg("ON FOOT Mode.")
         if rt and hum then
             local approachPosCenter = targetPos + Vector3.new(3, 0, 0)
             local raycastParams = RaycastParams.new()
@@ -167,7 +168,7 @@ local function SmartTeleport(targetPos, isDelivery)
 end
 
 -- =========================================================================
--- LOOP DA ENTREGA
+-- DELIVERY LOOP
 -- =========================================================================
 getgenv().DeliveryLoop = task.spawn(function()
     while task.wait(0.5) do
@@ -180,7 +181,7 @@ getgenv().DeliveryLoop = task.spawn(function()
                 if v:IsA("ProximityPrompt") and v.Name == "JobPadPrompt" then pad = v; break end
             end
             if pad then
-                logMsg("Rota iniciada: " .. mode)
+                logMsg("Route started: " .. mode)
                 SmartTeleport(pad.Parent.Position, false)
                 rWait(1, 1.5); fRem("RequestStartJobSession", "Delivery", "jobPad", mode)
                 rWait(1, 1.5); fRem("AttemptDeliveryPickup")

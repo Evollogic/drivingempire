@@ -10,16 +10,16 @@ getgenv().DeliveryMode = "Safe"
 getgenv().DevMode = false
 
 -- =========================================================================
--- ESTRUTURA PRINCIPAL DA UI
+-- MAIN UI STRUCTURE
 -- =========================================================================
 local sg = Instance.new("ScreenGui", coreGui)
 sg.Name = "DrivingEmpireHub"
 sg.ResetOnSpawn = false
 
--- SISTEMA DE NOTIFICAÇÃO SUPERIOR
+-- TOP NOTIFICATION SYSTEM
 local notifFrame = Instance.new("Frame", sg)
 notifFrame.Size = UDim2.new(0, 260, 0, 45)
-notifFrame.Position = UDim2.new(0.5, -130, 0, -60) -- Escondido acima da tela
+notifFrame.Position = UDim2.new(0.5, -130, 0, -60) -- Hidden above screen
 notifFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 35)
 notifFrame.ZIndex = 10
 Instance.new("UICorner", notifFrame).CornerRadius = UDim.new(0, 8)
@@ -42,17 +42,17 @@ local function ShowNotification(msg, color)
         notifDebounce = true
         notifText.Text = msg
         notifStroke.Color = color
-        -- Desce a notificação
+        -- Slide down
         ts:Create(notifFrame, TweenInfo.new(0.4, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {Position = UDim2.new(0.5, -130, 0, 30)}):Play()
         task.wait(2.5)
-        -- Sobe a notificação
+        -- Slide up
         ts:Create(notifFrame, TweenInfo.new(0.4, Enum.EasingStyle.Back, Enum.EasingDirection.In), {Position = UDim2.new(0.5, -130, 0, -60)}):Play()
         task.wait(0.4)
         notifDebounce = false
     end)
 end
 
--- 🍔 Botão Hambúrguer Flutuante
+-- 🍔 Floating Hamburger Button
 local burgerBtn = Instance.new("TextButton", sg)
 burgerBtn.Size = UDim2.new(0, 50, 0, 50)
 burgerBtn.Position = UDim2.new(1, -70, 0, 20)
@@ -66,7 +66,7 @@ local burgerStroke = Instance.new("UIStroke", burgerBtn)
 burgerStroke.Color = Color3.fromRGB(60, 150, 255)
 burgerStroke.Thickness = 2
 
--- Hub Principal
+-- Main Hub
 local hub = Instance.new("Frame", sg)
 hub.Size = UDim2.new(0, 320, 0, 0)
 hub.Position = UDim2.new(1, -400, 0, 20)
@@ -106,7 +106,7 @@ listLayout.SortOrder = Enum.SortOrder.LayoutOrder
 listLayout.Padding = UDim.new(0, 10)
 
 -- =========================================================================
--- FUNÇÃO CRIADORA DE BOTÕES
+-- BUTTON CREATOR FUNCTION
 -- =========================================================================
 local function createButton(parent, text, color)
     local btn = Instance.new("TextButton", parent)
@@ -130,7 +130,7 @@ local function createButton(parent, text, color)
 end
 
 -- =========================================================================
--- ELEMENTOS DO HUB
+-- HUB ELEMENTS
 -- =========================================================================
 local btnAutoDelivery = createButton(options, "Auto Delivery: OFF", Color3.fromRGB(180, 50, 50))
 btnAutoDelivery.LayoutOrder = 1
@@ -152,7 +152,7 @@ local btnHard = createButton(diffContainer, "Hard", Color3.fromRGB(50, 50, 60))
 btnHard.Size = UDim2.new(0.48, 0, 0, 35)
 
 -- =========================================================================
--- TERMINAL DE DEBUG (DEV MODE OCULTO)
+-- DEBUG TERMINAL (HIDDEN DEV MODE)
 -- =========================================================================
 local termFrame = Instance.new("Frame", sg)
 termFrame.Size = UDim2.new(0, 350, 0, 300)
@@ -196,16 +196,16 @@ getgenv().LogMsg = function(msg)
 end
 
 -- =========================================================================
--- LÓGICA DO MENU E BOTÕES
+-- MENU AND BUTTON LOGIC
 -- =========================================================================
-local hubAberto = false
+local isHubOpen = false
 local devClickCount = 0
 local lastClickTime = 0
 
 burgerBtn.MouseButton1Click:Connect(function()
-    -- Lógica de Abrir/Fechar o Menu Principal
-    hubAberto = not hubAberto
-    if hubAberto then
+    -- 1. Main Menu Open/Close Logic
+    isHubOpen = not isHubOpen
+    if isHubOpen then
         ts:Create(hub, TweenInfo.new(0.3, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {Size = UDim2.new(0, 320, 0, 180)}):Play()
         burgerStroke.Color = Color3.fromRGB(100, 255, 100)
     else
@@ -213,7 +213,7 @@ burgerBtn.MouseButton1Click:Connect(function()
         burgerStroke.Color = Color3.fromRGB(60, 150, 255)
     end
 
-    -- Lógica do Easter Egg e Animação Dinâmica
+    -- 2. Easter Egg Logic and Dynamic Animation
     local currentTime = tick()
     if currentTime - lastClickTime > 1.2 then
         devClickCount = 0 
@@ -221,13 +221,13 @@ burgerBtn.MouseButton1Click:Connect(function()
     lastClickTime = currentTime
     devClickCount = devClickCount + 1
 
-    -- Animação de "pulo" e inclinação a cada clique
-    local inclinacao = (devClickCount % 2 == 0) and 15 or -15
-    if devClickCount == 5 then inclinacao = 360 end -- Giro no quinto clique
+    -- "Jump" and tilt animation on every click
+    local tilt = (devClickCount % 2 == 0) and 15 or -15
+    if devClickCount == 5 then tilt = 360 end -- Full spin on 5th click
 
-    ts:Create(burgerBtn, TweenInfo.new(0.1), {Size = UDim2.new(0, 45, 0, 45), Rotation = inclinacao}):Play()
+    ts:Create(burgerBtn, TweenInfo.new(0.1), {Size = UDim2.new(0, 45, 0, 45), Rotation = tilt}):Play()
     task.wait(0.1)
-    ts:Create(burgerBtn, TweenInfo.new(0.1), {Size = UDim2.new(0, 50, 0, 50), Rotation = (devClickCount == 5 and 0 or inclinacao)}):Play()
+    ts:Create(burgerBtn, TweenInfo.new(0.1), {Size = UDim2.new(0, 50, 0, 50), Rotation = (devClickCount == 5 and 0 or tilt)}):Play()
     
     if devClickCount < 5 then
         task.wait(0.1)
@@ -240,10 +240,10 @@ burgerBtn.MouseButton1Click:Connect(function()
         termFrame.Visible = getgenv().DevMode
         
         if getgenv().DevMode then
-            ShowNotification("🐛 Dev Mode ATIVADO!", Color3.fromRGB(100, 255, 100))
-            getgenv().LogMsg("Modo Desenvolvedor ATIVADO!")
+            ShowNotification("🐛 Dev Mode ENABLED!", Color3.fromRGB(100, 255, 100))
+            getgenv().LogMsg("Developer Mode ENABLED!")
         else
-            ShowNotification("❌ Dev Mode DESATIVADO!", Color3.fromRGB(255, 100, 100))
+            ShowNotification("❌ Dev Mode DISABLED!", Color3.fromRGB(255, 100, 100))
         end
     end
 end)
@@ -254,13 +254,13 @@ btnAutoDelivery.MouseButton1Click:Connect(function()
         btnAutoDelivery.Text = "Auto Delivery: ON"
         ts:Create(btnAutoDelivery, TweenInfo.new(0.2), {BackgroundColor3 = Color3.fromRGB(50, 180, 80)}):Play()
         ts:Create(diffContainer, TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {Size = UDim2.new(1, 0, 0, 35)}):Play()
-        getgenv().LogMsg("Auto Delivery INICIADO.")
+        getgenv().LogMsg("Auto Delivery STARTED.")
         pcall(function() loadfile("Works/Delivery.lua")() end)
     else
         btnAutoDelivery.Text = "Auto Delivery: OFF"
         ts:Create(btnAutoDelivery, TweenInfo.new(0.2), {BackgroundColor3 = Color3.fromRGB(180, 50, 50)}):Play()
         ts:Create(diffContainer, TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {Size = UDim2.new(1, 0, 0, 0)}):Play()
-        getgenv().LogMsg("Auto Delivery PARADO.")
+        getgenv().LogMsg("Auto Delivery STOPPED.")
     end
 end)
 
@@ -272,11 +272,11 @@ end
 btnEasy.MouseButton1Click:Connect(function()
     getgenv().DeliveryMode = "Safe"
     updateDiffColors()
-    getgenv().LogMsg("Dificuldade alterada para: EASY (Safe)")
+    getgenv().LogMsg("Difficulty changed to: EASY (Safe)")
 end)
 
 btnHard.MouseButton1Click:Connect(function()
     getgenv().DeliveryMode = "HighRisk"
     updateDiffColors()
-    getgenv().LogMsg("Dificuldade alterada para: HARD (HighRisk)")
+    getgenv().LogMsg("Difficulty changed to: HARD (HighRisk)")
 end)
