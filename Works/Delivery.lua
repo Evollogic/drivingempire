@@ -229,8 +229,6 @@ local function SmartTeleport(targetPos, isDelivery)
         logMsg("Mode: ON FOOT. Creating invisible floor...")
         if rt and hum then
             local charOffset = math.random(35, 45)
-            
-            -- O boneco spawna um pouco mais alto (+3.5) para os pés tocarem a plataforma
             local startPos = Vector3.new(targetPos.X + charOffset, targetPos.Y + 3.5, targetPos.Z)
 
             local tempFloor = Instance.new("Part")
@@ -238,10 +236,7 @@ local function SmartTeleport(targetPos, isDelivery)
             tempFloor.Anchored = true
             tempFloor.CanCollide = true
             tempFloor.Transparency = 1
-            -- Espessura de 2 studs no eixo Y
             tempFloor.Size = Vector3.new(200, 2, 200)
-            
-            -- COMO O TAMANHO Y É 2, DIMINUIR 1 NO POS.Y FAZ O TOPO DA PLATAFORMA FICAR EXATAMENTE NO TARGETPOS.Y
             tempFloor.Position = Vector3.new(targetPos.X, targetPos.Y - 1, targetPos.Z)
             tempFloor.Parent = ws
 
@@ -290,18 +285,25 @@ getgenv().DeliveryLoop = task.spawn(function()
                 end
             end
             if pad then
-                logMsg("Starting new route (" .. mode .. ") directly from current location")
+                -- Boneco agora TELEPORTA PARA O CENTRO primeiro, para o timer ser real
+                logMsg("Moving to center to start route (" .. mode .. ")...")
+                SmartTeleport(pad.Parent.Position, false)
                 
+                -- Começa as requisições APÓS chegar no centro
                 fRem("RequestStartJobSession", "Delivery", "jobPad", mode)
-                logMsg("Job Session requested. Waiting 1 second...")
-                task.wait(1.0)
-                
+                task.wait(0.5)
                 fRem("AttemptDeliveryPickup")
                 
-                -- Tempo gerado entre 7 e 12 segundos + o 1 segundo de cima = 8 a 13s total.
-                local selectedWait = math.random(70, 120) / 10
-                logMsg("Collecting boxes! Waiting timer: " .. selectedWait .. "s...")
-                task.wait(selectedWait) 
+                local selectedWait = math.random(80, 130) / 10
+                logMsg("Arrived at center. Collection timer STARTED: " .. selectedWait .. "s")
+                
+                -- CRONÔMETRO EXATO COM TICK PARA APARECER NO LOG
+                local startTime = tick()
+                task.wait(selectedWait)
+                local endTime = tick()
+                local timePassed = endTime - startTime
+                
+                logMsg("✅ Timer FINISHED! Time passed: " .. string.format("%.2f", timePassed) .. " seconds")
                 
                 getgenv().JobPhase = "Farming"
             else
