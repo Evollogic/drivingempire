@@ -25,15 +25,14 @@ local function logMsg(msg)
     if getgenv().LogMsg then
         getgenv().LogMsg(msg)
     else
-        print("[Delivery] " .. tostring(msg))
+        print("Delivery: " .. tostring(msg))
     end
 end
 
-logMsg("🔥 VERSÃO COMPLETA (Anti-Sit + Sem Teleporte Inicial + Timers) 🔥")
-logMsg("🛡️ Anti-Fling & Anti-Sit Engine loaded. Waiting for events...")
+logMsg("Anti-Fling & Anti-Sit Engine loaded. Waiting for events...")
 
 -- =========================================================================
--- SISTEMA ANTI-SENTADA E ANTI-TRAVA (EMERGÊNCIA)
+-- SISTEMA ANTI-SENTADA E ANTI-TRAVA (EMERGÊNCIA) CORRIGIDO
 -- =========================================================================
 local stuckTick = 0
 getgenv().AntiSeatLoop = game:GetService("RunService").Heartbeat:Connect(function()
@@ -41,23 +40,29 @@ getgenv().AntiSeatLoop = game:GetService("RunService").Heartbeat:Connect(functio
     local c = lp.Character
     if c then
         local hum = c:FindFirstChildOfClass("Humanoid")
-        if hum then
+        local rt = c:FindFirstChild("HumanoidRootPart")
+        if hum and rt then
             if hum.Sit then
                 local seatPart = hum.SeatPart
                 local isDrivingCar = false
-                if seatPart then
-                    local model = seatPart:FindFirstAncestorWhichIsA("Model")
-                    if model and model ~= c then
-                        isDrivingCar = true
-                    end
+                
+                -- Carros de verdade usam VehicleSeat. Cadeiras normais usam Seat.
+                if seatPart and seatPart:IsA("VehicleSeat") then
+                    isDrivingCar = true
                 end
 
                 if not isDrivingCar then
+                    -- Força levantar e pula instantaneamente
                     hum.Sit = false
+                    hum.Jump = true
                     hum:ChangeState(Enum.HumanoidStateType.Running)
+                    
+                    -- Joga o boneco para cima para quebrar o Weld da cadeira
+                    rt.CFrame = rt.CFrame + Vector3.new(0, 5, 0)
+                    
                     stuckTick = stuckTick + 1
-                    if stuckTick > 120 then
-                        logMsg("⚠️ WARNING: Character stuck sitting! Forcing emergency reset...")
+                    if stuckTick > 60 then
+                        logMsg("WARNING: Character stuck sitting! Forcing emergency reset...")
                         hum.Health = 0
                         stuckTick = 0
                     end
@@ -89,6 +94,11 @@ end)
 -- =========================================================================
 -- FUNÇÕES DE SUPORTE
 -- =========================================================================
+local function rWait(min, max)
+    local waitTime = math.random(min * 100, max * 100) / 100
+    task.wait(waitTime)
+end
+
 local function fRem(n,...)
     local r = remotes:FindFirstChild(n)
     if not r then return end
@@ -128,8 +138,8 @@ end
 -- FUNÇÃO DE TELEPORTE SMART COM FORCE-HOLD
 -- =========================================================================
 local function SmartTeleport(targetPos, isDelivery)
-    logMsg("🚀 --- STARTING SMART TELEPORT ---")
-    logMsg("📍 Target Pos: " .. tostring(targetPos))
+    logMsg("--- STARTING SMART TELEPORT ---")
+    logMsg("Target Pos: " .. tostring(targetPos))
 
     local c, rt, hum = getChar()
     local car = nil
@@ -142,7 +152,7 @@ local function SmartTeleport(targetPos, isDelivery)
     end
 
     if car then
-        logMsg("🚗 Mode: VEHICLE. Car detected: " .. car.Name)
+        logMsg("Mode: VEHICLE. Car detected: " .. car.Name)
         local cPart = car.PrimaryPart or car:FindFirstChildWhichIsA("BasePart", true)
         local allVehicleParts = cPart:GetConnectedParts(true)
         local currentPivot = car:GetPivot()
@@ -152,7 +162,7 @@ local function SmartTeleport(targetPos, isDelivery)
         local dir = Vector3.new(1, 0, 0)
 
         local dist = (flatCurrent - flatTarget).Magnitude
-        logMsg("📏 2D Distance to target: " .. string.format("%.2f", dist))
+        logMsg("2D Distance to target: " .. string.format("%.2f", dist))
 
         if dist > 1 then
             dir = (flatCurrent - flatTarget).Unit
@@ -163,11 +173,11 @@ local function SmartTeleport(targetPos, isDelivery)
         local lookAt = Vector3.new(targetPos.X, startPos.Y, targetPos.Z)
         local destCFrame = CFrame.new(startPos, lookAt)
 
-        logMsg("🎯 Calculated Destination CFrame (Offset: " .. carOffset .. ")")
+        logMsg("Calculated Destination CFrame (Offset: " .. carOffset .. "): " .. tostring(startPos))
 
         local estadosColisao = {}
 
-        logMsg("👻 Applying Ghost Mode...")
+        logMsg("Applying Ghost Mode...")
         for _, p in pairs(allVehicleParts) do
             estadosColisao[p] = p.CanCollide
             local n = p.Name:lower()
@@ -176,7 +186,7 @@ local function SmartTeleport(targetPos, isDelivery)
             end
         end
 
-        logMsg("⚓ Applying Force-Hold (Zeroing inertia for 15 frames)...")
+        logMsg("Applying Force-Hold (Zeroing inertia for 15 frames)...")
         for i = 1, 15 do
             car:PivotTo(destCFrame)
             for _, p in pairs(allVehicleParts) do
@@ -186,7 +196,7 @@ local function SmartTeleport(targetPos, isDelivery)
             task.wait()
         end
 
-        logMsg("✅ Force-Hold complete. Physics stabilized.")
+        logMsg("Force-Hold complete. Physics stabilized.")
 
         simularBotao("Left", false)
         simularBotao("Right", false)
@@ -203,7 +213,7 @@ local function SmartTeleport(targetPos, isDelivery)
 
             local currentDist = (cPart.Position * Vector3.new(1,0,1) - targetPos * Vector3.new(1,0,1)).Magnitude
             if currentDist < 15 then
-                logMsg("🏁 Reached driving target (Dist < 15). Lock activated.")
+                logMsg("Reached driving target (Dist < 15). Lock activated.")
                 break
             end
             timeOut = timeOut + task.wait(0.1)
@@ -214,15 +224,15 @@ local function SmartTeleport(targetPos, isDelivery)
         task.wait(0.8)
         simularBotao("Brake", false)
 
-        logMsg("🛡️ Restoring normal collisions...")
+        logMsg("Restoring normal collisions...")
         for _, p in pairs(allVehicleParts) do
             if estadosColisao[p] ~= nil then
                 p.CanCollide = estadosColisao[p]
             end
         end
-        logMsg("🛑 --- END TELEPORT (VEHICLE) ---")
+        logMsg("--- END TELEPORT (VEHICLE) ---")
     else
-        logMsg("🚶 Mode: ON FOOT. Creating invisible floor...")
+        logMsg("Mode: ON FOOT. Creating invisible floor...")
         if rt and hum then
             local charOffset = math.random(35, 45)
             local startPos = Vector3.new(targetPos.X + charOffset, targetPos.Y + 3.5, targetPos.Z)
@@ -236,12 +246,13 @@ local function SmartTeleport(targetPos, isDelivery)
             tempFloor.Position = Vector3.new(targetPos.X, targetPos.Y - 1, targetPos.Z)
             tempFloor.Parent = ws
 
-            logMsg("🧱 Invisible floor created matching target exact Y: " .. tostring(targetPos.Y))
+            logMsg("Invisible floor created matching target exact Y: " .. tostring(targetPos.Y))
 
             rt.Velocity = Vector3.zero
             rt.CFrame = CFrame.new(startPos)
             hum.PlatformStand = false
             hum.Sit = false
+            hum.Jump = true
             hum:ChangeState(Enum.HumanoidStateType.Freefall)
 
             task.wait(0.2)
@@ -255,9 +266,9 @@ local function SmartTeleport(targetPos, isDelivery)
                 end
                 timeOut = timeOut + task.wait(0.1)
             end
-
+            
             tempFloor:Destroy()
-            logMsg("🛑 --- END TELEPORT (ON FOOT) ---")
+            logMsg("--- END TELEPORT (ON FOOT) ---")
         end
     end
 end
@@ -273,38 +284,51 @@ getgenv().DeliveryLoop = task.spawn(function()
             local modeStr = getgenv().DeliveryMode
             local mode = (modeStr == "Hard" or modeStr == "HighRisk") and "HighRisk" or "Safe"
 
-            logMsg("📡 Starting job remotely (" .. mode .. ")...")
-            fRem("RequestStartJobSession", "Delivery", "jobPad", mode)
-            task.wait(0.5)
-            fRem("AttemptDeliveryPickup")
-            task.wait(0.5)
+            local pad = nil
+            for _,v in pairs(ws:GetDescendants()) do
+                if v:IsA("ProximityPrompt") and v.Name == "JobPadPrompt" then
+                    pad = v
+                    break
+                end
+            end
+            if pad then
+                logMsg("Moving to center to start route (" .. mode .. ")...")
+                SmartTeleport(pad.Parent.Position, false)
+                
+                fRem("RequestStartJobSession", "Delivery", "jobPad", mode)
+                task.wait(0.5)
+                fRem("AttemptDeliveryPickup")
+                
+                -- TEMPO DE COLETA REAL (Entre 9 e 12 segundos)
+                local selectedWait = math.random(90, 120) / 10
+                logMsg("Arrived at center. Collection timer STARTED: " .. selectedWait .. "s")
+                
+                local startTime = tick()
+                task.wait(selectedWait)
+                local endTime = tick()
+                local timePassed = endTime - startTime
+                
+                logMsg("✅ Timer FINISHED! Time passed: " .. string.format("%.2f", timePassed) .. " seconds")
+                
+                getgenv().JobPhase = "Farming"
+            else
+                task.wait(2)
+            end
             
-            logMsg("✅ Job started. Proceeding to first delivery.")
-            getgenv().JobPhase = "Farming"
-
         elseif getgenv().JobPhase == "Farming" then
             local t = ws:FindFirstChild("DeliveryTargetAnchor")
             if t and t.Parent == ws then
                 if t ~= getgenv().LastAnchor then
                     SmartTeleport(t.Position, true)
-
-                    -- Tempo entre 4,5 e 7 segundos para entregar
-                    local waitEntrega = math.random(45, 70) / 10
-                    logMsg("⏳ Wait (4.5 a 7s): " .. waitEntrega .. "s para entregar...")
-                    task.wait(waitEntrega)
-
+                    
                     fRem("AttemptDeliveryComplete")
                     task.wait(0.2)
                     fRem("AttemptDeliveryComplete")
+                    task.wait(0.3)
                     
-                    -- Intervalo de 2 a 5 segundos antes de puxar a próxima
-                    local waitIntervalo = math.random(20, 50) / 10
-                    logMsg("⏱️ Interval (2 a 5s): " .. waitIntervalo .. "s para puxar a próxima...")
-                    task.wait(waitIntervalo)
-
                     fRem("AttemptDeliveryPickup")
                     getgenv().LastAnchor = t
-
+                    
                     task.spawn(function()
                         task.wait(2.0)
                         if getgenv().LastAnchor == t then
