@@ -32,7 +32,7 @@ end
 logMsg("Anti-Fling & Anti-Sit Engine loaded. Waiting for events...")
 
 -- =========================================================================
--- SISTEMA ANTI-SENTADA E ANTI-TRAVA (EMERGÊNCIA) CORRIGIDO
+-- SISTEMA ANTI-SENTADA E ANTI-TRAVA (EMERGÊNCIA)
 -- =========================================================================
 local stuckTick = 0
 getgenv().AntiSeatLoop = game:GetService("RunService").Heartbeat:Connect(function()
@@ -46,18 +46,15 @@ getgenv().AntiSeatLoop = game:GetService("RunService").Heartbeat:Connect(functio
                 local seatPart = hum.SeatPart
                 local isDrivingCar = false
                 
-                -- Carros de verdade usam VehicleSeat. Cadeiras normais usam Seat.
                 if seatPart and seatPart:IsA("VehicleSeat") then
                     isDrivingCar = true
                 end
 
                 if not isDrivingCar then
-                    -- Força levantar e pula instantaneamente
                     hum.Sit = false
                     hum.Jump = true
                     hum:ChangeState(Enum.HumanoidStateType.Running)
                     
-                    -- Joga o boneco para cima para quebrar o Weld da cadeira
                     rt.CFrame = rt.CFrame + Vector3.new(0, 5, 0)
                     
                     stuckTick = stuckTick + 1
@@ -94,11 +91,6 @@ end)
 -- =========================================================================
 -- FUNÇÕES DE SUPORTE
 -- =========================================================================
-local function rWait(min, max)
-    local waitTime = math.random(min * 100, max * 100) / 100
-    task.wait(waitTime)
-end
-
 local function fRem(n,...)
     local r = remotes:FindFirstChild(n)
     if not r then return end
@@ -135,12 +127,11 @@ local function simularBotao(nomeBotao, pressionar)
 end
 
 -- =========================================================================
--- FUNÇÃO DE TELEPORTE SMART COM FORCE-HOLD
+-- FUNÇÃO DE TELEPORTE SMART
 -- =========================================================================
 local function SmartTeleport(targetPos, isDelivery)
     logMsg("--- STARTING SMART TELEPORT ---")
-    logMsg("Target Pos: " .. tostring(targetPos))
-
+    
     local c, rt, hum = getChar()
     local car = nil
 
@@ -152,7 +143,6 @@ local function SmartTeleport(targetPos, isDelivery)
     end
 
     if car then
-        logMsg("Mode: VEHICLE. Car detected: " .. car.Name)
         local cPart = car.PrimaryPart or car:FindFirstChildWhichIsA("BasePart", true)
         local allVehicleParts = cPart:GetConnectedParts(true)
         local currentPivot = car:GetPivot()
@@ -161,10 +151,7 @@ local function SmartTeleport(targetPos, isDelivery)
         local flatTarget = Vector3.new(targetPos.X, 0, targetPos.Z)
         local dir = Vector3.new(1, 0, 0)
 
-        local dist = (flatCurrent - flatTarget).Magnitude
-        logMsg("2D Distance to target: " .. string.format("%.2f", dist))
-
-        if dist > 1 then
+        if (flatCurrent - flatTarget).Magnitude > 1 then
             dir = (flatCurrent - flatTarget).Unit
         end
 
@@ -173,11 +160,8 @@ local function SmartTeleport(targetPos, isDelivery)
         local lookAt = Vector3.new(targetPos.X, startPos.Y, targetPos.Z)
         local destCFrame = CFrame.new(startPos, lookAt)
 
-        logMsg("Calculated Destination CFrame (Offset: " .. carOffset .. "): " .. tostring(startPos))
-
         local estadosColisao = {}
 
-        logMsg("Applying Ghost Mode...")
         for _, p in pairs(allVehicleParts) do
             estadosColisao[p] = p.CanCollide
             local n = p.Name:lower()
@@ -186,7 +170,6 @@ local function SmartTeleport(targetPos, isDelivery)
             end
         end
 
-        logMsg("Applying Force-Hold (Zeroing inertia for 15 frames)...")
         for i = 1, 15 do
             car:PivotTo(destCFrame)
             for _, p in pairs(allVehicleParts) do
@@ -195,8 +178,6 @@ local function SmartTeleport(targetPos, isDelivery)
             end
             task.wait()
         end
-
-        logMsg("Force-Hold complete. Physics stabilized.")
 
         simularBotao("Left", false)
         simularBotao("Right", false)
@@ -213,7 +194,6 @@ local function SmartTeleport(targetPos, isDelivery)
 
             local currentDist = (cPart.Position * Vector3.new(1,0,1) - targetPos * Vector3.new(1,0,1)).Magnitude
             if currentDist < 15 then
-                logMsg("Reached driving target (Dist < 15). Lock activated.")
                 break
             end
             timeOut = timeOut + task.wait(0.1)
@@ -224,7 +204,6 @@ local function SmartTeleport(targetPos, isDelivery)
         task.wait(0.8)
         simularBotao("Brake", false)
 
-        logMsg("Restoring normal collisions...")
         for _, p in pairs(allVehicleParts) do
             if estadosColisao[p] ~= nil then
                 p.CanCollide = estadosColisao[p]
@@ -232,7 +211,6 @@ local function SmartTeleport(targetPos, isDelivery)
         end
         logMsg("--- END TELEPORT (VEHICLE) ---")
     else
-        logMsg("Mode: ON FOOT. Creating invisible floor...")
         if rt and hum then
             local charOffset = math.random(35, 45)
             local startPos = Vector3.new(targetPos.X + charOffset, targetPos.Y + 3.5, targetPos.Z)
@@ -245,8 +223,6 @@ local function SmartTeleport(targetPos, isDelivery)
             tempFloor.Size = Vector3.new(200, 2, 200)
             tempFloor.Position = Vector3.new(targetPos.X, targetPos.Y - 1, targetPos.Z)
             tempFloor.Parent = ws
-
-            logMsg("Invisible floor created matching target exact Y: " .. tostring(targetPos.Y))
 
             rt.Velocity = Vector3.zero
             rt.CFrame = CFrame.new(startPos)
@@ -299,16 +275,15 @@ getgenv().DeliveryLoop = task.spawn(function()
                 task.wait(0.5)
                 fRem("AttemptDeliveryPickup")
                 
-                -- TEMPO DE COLETA REAL (Entre 12 e 15 segundos)
-                local selectedWait = math.random(120, 150) / 10
+                -- TEMPO DE COLETA NO CENTRO (Voltou para 9 a 12s)
+                local selectedWait = math.random(90, 120) / 10
                 logMsg("Arrived at center. Collection timer STARTED: " .. selectedWait .. "s")
                 
                 local startTime = tick()
                 task.wait(selectedWait)
                 local endTime = tick()
-                local timePassed = endTime - startTime
                 
-                logMsg("✅ Timer FINISHED! Time passed: " .. string.format("%.2f", timePassed) .. " seconds")
+                logMsg("✅ Timer FINISHED! Time passed: " .. string.format("%.2f", (endTime - startTime)) .. "s")
                 
                 getgenv().JobPhase = "Farming"
             else
@@ -321,6 +296,7 @@ getgenv().DeliveryLoop = task.spawn(function()
                 if t ~= getgenv().LastAnchor then
                     SmartTeleport(t.Position, true)
                     
+                    -- ENTREGA NA CASA
                     fRem("AttemptDeliveryComplete")
                     task.wait(0.2)
                     fRem("AttemptDeliveryComplete")
@@ -329,8 +305,16 @@ getgenv().DeliveryLoop = task.spawn(function()
                     fRem("AttemptDeliveryPickup")
                     getgenv().LastAnchor = t
                     
+                    -- ====================================================================
+                    -- TEMPO DE ESPERA NAS ENTREGAS DIRETAS (LOOP FARMING)
+                    -- ====================================================================
+                    local tempoCasa = math.random(40, 70) / 10 -- Espera entre 4 e 7 segundos
+                    logMsg("📦 Delivered! Waiting " .. tempoCasa .. "s before moving to next house...")
+                    task.wait(tempoCasa)
+                    
+                    -- Fallback para limpar a memória da casa antiga e não travar o loop
                     task.spawn(function()
-                        task.wait(2.0)
+                        task.wait(1.5)
                         if getgenv().LastAnchor == t then
                             getgenv().LastAnchor = nil
                         end
