@@ -226,25 +226,26 @@ local function SmartTeleport(targetPos, isDelivery)
         end
         logMsg("--- END TELEPORT (VEHICLE) ---")
     else
-        logMsg("Mode: ON FOOT. Calculating Raycast...")
+        logMsg("Mode: ON FOOT. Creating invisible floor...")
         if rt and hum then
             local charOffset = math.random(35, 45)
-            local outOffset = Vector3.new(charOffset, 0, 0)
-            local approachPosCenter = targetPos + outOffset
+            
+            -- O boneco spawna um pouco mais alto (+3.5) para os pés tocarem a plataforma
+            local startPos = Vector3.new(targetPos.X + charOffset, targetPos.Y + 3.5, targetPos.Z)
 
-            local rayOrigin = approachPosCenter + Vector3.new(0, 200, 0)
-            local raycastParams = RaycastParams.new()
-            raycastParams.FilterDescendantsInstances = {c}
-            raycastParams.FilterType = Enum.RaycastFilterType.Exclude
-            local rayResult = ws:Raycast(rayOrigin, Vector3.new(0, -400, 0), raycastParams)
+            local tempFloor = Instance.new("Part")
+            tempFloor.Name = "DeliveryGhostFloor"
+            tempFloor.Anchored = true
+            tempFloor.CanCollide = true
+            tempFloor.Transparency = 1
+            -- Espessura de 2 studs no eixo Y
+            tempFloor.Size = Vector3.new(200, 2, 200)
+            
+            -- COMO O TAMANHO Y É 2, DIMINUIR 1 NO POS.Y FAZ O TOPO DA PLATAFORMA FICAR EXATAMENTE NO TARGETPOS.Y
+            tempFloor.Position = Vector3.new(targetPos.X, targetPos.Y - 1, targetPos.Z)
+            tempFloor.Parent = ws
 
-            local startPos = approachPosCenter + Vector3.new(0, 10, 0)
-            if rayResult then
-                startPos = rayResult.Position + Vector3.new(0, 3, 0)
-                logMsg("Raycast hit: " .. rayResult.Instance.Name .. " at " .. tostring(rayResult.Position))
-            else
-                logMsg("WARNING: Raycast failed to find floor! Using fallback Y+10.")
-            end
+            logMsg("Invisible floor created matching target exact Y: " .. tostring(targetPos.Y))
 
             rt.Velocity = Vector3.zero
             rt.CFrame = CFrame.new(startPos)
@@ -263,6 +264,8 @@ local function SmartTeleport(targetPos, isDelivery)
                 end
                 timeOut = timeOut + task.wait(0.1)
             end
+            
+            tempFloor:Destroy()
             logMsg("--- END TELEPORT (ON FOOT) ---")
         end
     end
@@ -289,14 +292,14 @@ getgenv().DeliveryLoop = task.spawn(function()
             if pad then
                 logMsg("Starting new route (" .. mode .. ") directly from current location")
                 
-                -- O SEGREDO TÁ AQUI: Dar tempo para o servidor processar a sessão antes de pedir a caixa!
                 fRem("RequestStartJobSession", "Delivery", "jobPad", mode)
-                logMsg("Job Session requested. Waiting 2 seconds...")
-                task.wait(2.0)
+                logMsg("Job Session requested. Waiting 1 second...")
+                task.wait(1.0)
                 
                 fRem("AttemptDeliveryPickup")
                 
-                local selectedWait = math.random(100, 150) / 10 -- Gera entre 10 e 15 segundos
+                -- Tempo gerado entre 7 e 12 segundos + o 1 segundo de cima = 8 a 13s total.
+                local selectedWait = math.random(70, 120) / 10
                 logMsg("Collecting boxes! Waiting timer: " .. selectedWait .. "s...")
                 task.wait(selectedWait) 
                 
@@ -311,17 +314,14 @@ getgenv().DeliveryLoop = task.spawn(function()
                 if t ~= getgenv().LastAnchor then
                     SmartTeleport(t.Position, true)
                     
-                    -- ENTREGA INSTANTÂNEA
                     fRem("AttemptDeliveryComplete")
                     task.wait(0.2)
                     fRem("AttemptDeliveryComplete")
                     task.wait(0.3)
                     
-                    -- COLETA A PRÓXIMA CAIXA
                     fRem("AttemptDeliveryPickup")
                     getgenv().LastAnchor = t
                     
-                    -- Limpa a memória pra não bugar na próxima casa
                     task.spawn(function()
                         task.wait(2.0)
                         if getgenv().LastAnchor == t then
