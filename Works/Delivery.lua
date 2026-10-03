@@ -25,11 +25,12 @@ local function logMsg(msg)
     if getgenv().LogMsg then
         getgenv().LogMsg(msg)
     else
-        print("Delivery: " .. tostring(msg))
+        print("[Delivery] " .. tostring(msg))
     end
 end
 
-logMsg("Anti-Fling & Anti-Sit Engine loaded. Waiting for events...")
+logMsg("🔥 VERSÃO NOVA 9-12s CARREGADA 🔥")
+logMsg("🛡️ Anti-Fling & Anti-Sit Engine loaded. Waiting for events...")
 
 -- =========================================================================
 -- SISTEMA ANTI-SENTADA E ANTI-TRAVA (EMERGÊNCIA)
@@ -56,7 +57,7 @@ getgenv().AntiSeatLoop = game:GetService("RunService").Heartbeat:Connect(functio
                     hum:ChangeState(Enum.HumanoidStateType.Running)
                     stuckTick = stuckTick + 1
                     if stuckTick > 120 then
-                        logMsg("WARNING: Character stuck sitting! Forcing emergency reset...")
+                        logMsg("⚠️ WARNING: Character stuck sitting! Forcing emergency reset...")
                         hum.Health = 0
                         stuckTick = 0
                     end
@@ -132,8 +133,8 @@ end
 -- FUNÇÃO DE TELEPORTE SMART COM FORCE-HOLD
 -- =========================================================================
 local function SmartTeleport(targetPos, isDelivery)
-    logMsg("--- STARTING SMART TELEPORT ---")
-    logMsg("Target Pos: " .. tostring(targetPos))
+    logMsg("🚀 --- STARTING SMART TELEPORT ---")
+    logMsg("📍 Target Pos: " .. tostring(targetPos))
 
     local c, rt, hum = getChar()
     local car = nil
@@ -146,7 +147,7 @@ local function SmartTeleport(targetPos, isDelivery)
     end
 
     if car then
-        logMsg("Mode: VEHICLE. Car detected: " .. car.Name)
+        logMsg("🚗 Mode: VEHICLE. Car detected: " .. car.Name)
         local cPart = car.PrimaryPart or car:FindFirstChildWhichIsA("BasePart", true)
         local allVehicleParts = cPart:GetConnectedParts(true)
         local currentPivot = car:GetPivot()
@@ -156,7 +157,7 @@ local function SmartTeleport(targetPos, isDelivery)
         local dir = Vector3.new(1, 0, 0)
 
         local dist = (flatCurrent - flatTarget).Magnitude
-        logMsg("2D Distance to target: " .. string.format("%.2f", dist))
+        logMsg("📏 2D Distance to target: " .. string.format("%.2f", dist))
 
         if dist > 1 then
             dir = (flatCurrent - flatTarget).Unit
@@ -167,11 +168,11 @@ local function SmartTeleport(targetPos, isDelivery)
         local lookAt = Vector3.new(targetPos.X, startPos.Y, targetPos.Z)
         local destCFrame = CFrame.new(startPos, lookAt)
 
-        logMsg("Calculated Destination CFrame (Offset: " .. carOffset .. "): " .. tostring(startPos))
+        logMsg("🎯 Calculated Destination CFrame (Offset: " .. carOffset .. ")")
 
         local estadosColisao = {}
 
-        logMsg("Applying Ghost Mode...")
+        logMsg("👻 Applying Ghost Mode...")
         for _, p in pairs(allVehicleParts) do
             estadosColisao[p] = p.CanCollide
             local n = p.Name:lower()
@@ -180,7 +181,7 @@ local function SmartTeleport(targetPos, isDelivery)
             end
         end
 
-        logMsg("Applying Force-Hold (Zeroing inertia for 15 frames)...")
+        logMsg("⚓ Applying Force-Hold (Zeroing inertia for 15 frames)...")
         for i = 1, 15 do
             car:PivotTo(destCFrame)
             for _, p in pairs(allVehicleParts) do
@@ -190,7 +191,7 @@ local function SmartTeleport(targetPos, isDelivery)
             task.wait()
         end
 
-        logMsg("Force-Hold complete. Physics stabilized.")
+        logMsg("✅ Force-Hold complete. Physics stabilized.")
 
         simularBotao("Left", false)
         simularBotao("Right", false)
@@ -207,7 +208,7 @@ local function SmartTeleport(targetPos, isDelivery)
 
             local currentDist = (cPart.Position * Vector3.new(1,0,1) - targetPos * Vector3.new(1,0,1)).Magnitude
             if currentDist < 15 then
-                logMsg("Reached driving target (Dist < 15). Lock activated.")
+                logMsg("🏁 Reached driving target (Dist < 15). Lock activated.")
                 break
             end
             timeOut = timeOut + task.wait(0.1)
@@ -218,15 +219,15 @@ local function SmartTeleport(targetPos, isDelivery)
         task.wait(0.8)
         simularBotao("Brake", false)
 
-        logMsg("Restoring normal collisions...")
+        logMsg("🛡️ Restoring normal collisions...")
         for _, p in pairs(allVehicleParts) do
             if estadosColisao[p] ~= nil then
                 p.CanCollide = estadosColisao[p]
             end
         end
-        logMsg("--- END TELEPORT (VEHICLE) ---")
+        logMsg("🛑 --- END TELEPORT (VEHICLE) ---")
     else
-        logMsg("Mode: ON FOOT. Creating invisible floor...")
+        logMsg("🚶 Mode: ON FOOT. Creating invisible floor...")
         if rt and hum then
             local charOffset = math.random(35, 45)
             local startPos = Vector3.new(targetPos.X + charOffset, targetPos.Y + 3.5, targetPos.Z)
@@ -240,7 +241,7 @@ local function SmartTeleport(targetPos, isDelivery)
             tempFloor.Position = Vector3.new(targetPos.X, targetPos.Y - 1, targetPos.Z)
             tempFloor.Parent = ws
 
-            logMsg("Invisible floor created matching target exact Y: " .. tostring(targetPos.Y))
+            logMsg("🧱 Invisible floor created matching target exact Y: " .. tostring(targetPos.Y))
 
             rt.Velocity = Vector3.zero
             rt.CFrame = CFrame.new(startPos)
@@ -259,9 +260,9 @@ local function SmartTeleport(targetPos, isDelivery)
                 end
                 timeOut = timeOut + task.wait(0.1)
             end
-            
+
             tempFloor:Destroy()
-            logMsg("--- END TELEPORT (ON FOOT) ---")
+            logMsg("🛑 --- END TELEPORT (ON FOOT) ---")
         end
     end
 end
@@ -285,43 +286,43 @@ getgenv().DeliveryLoop = task.spawn(function()
                 end
             end
             if pad then
-                logMsg("Moving to center to start route (" .. mode .. ")...")
+                logMsg("🏃 Moving to center to start route (" .. mode .. ")...")
                 SmartTeleport(pad.Parent.Position, false)
-                
+
                 fRem("RequestStartJobSession", "Delivery", "jobPad", mode)
                 task.wait(0.5)
                 fRem("AttemptDeliveryPickup")
-                
+
                 -- TEMPO DE COLETA REAL (Entre 9 e 12 segundos)
                 local selectedWait = math.random(90, 120) / 10
-                logMsg("Arrived at center. Collection timer STARTED: " .. selectedWait .. "s")
-                
+                logMsg("⏱️ Arrived at center. Collection timer STARTED: " .. selectedWait .. "s")
+
                 local startTime = tick()
                 task.wait(selectedWait)
                 local endTime = tick()
                 local timePassed = endTime - startTime
-                
+
                 logMsg("✅ Timer FINISHED! Time passed: " .. string.format("%.2f", timePassed) .. " seconds")
-                
+
                 getgenv().JobPhase = "Farming"
             else
                 task.wait(2)
             end
-            
+
         elseif getgenv().JobPhase == "Farming" then
             local t = ws:FindFirstChild("DeliveryTargetAnchor")
             if t and t.Parent == ws then
                 if t ~= getgenv().LastAnchor then
                     SmartTeleport(t.Position, true)
-                    
+
                     fRem("AttemptDeliveryComplete")
                     task.wait(0.2)
                     fRem("AttemptDeliveryComplete")
                     task.wait(0.3)
-                    
+
                     fRem("AttemptDeliveryPickup")
                     getgenv().LastAnchor = t
-                    
+
                     task.spawn(function()
                         task.wait(2.0)
                         if getgenv().LastAnchor == t then
