@@ -29,7 +29,7 @@ local function logMsg(msg)
     end
 end
 
-logMsg("🔥 VERSÃO TIMERS AJUSTADOS (Entrega: 4.5-7s | Intervalo: 2-5s) 🔥")
+logMsg("🔥 VERSÃO COMPLETA (Anti-Sit + Sem Teleporte Inicial + Timers) 🔥")
 logMsg("🛡️ Anti-Fling & Anti-Sit Engine loaded. Waiting for events...")
 
 -- =========================================================================
@@ -288,7 +288,7 @@ getgenv().DeliveryLoop = task.spawn(function()
                 if t ~= getgenv().LastAnchor then
                     SmartTeleport(t.Position, true)
 
-                    -- Tempo entre 4,5 e 7 segundos
+                    -- Tempo entre 4,5 e 7 segundos para entregar
                     local waitEntrega = math.random(45, 70) / 10
                     logMsg("⏳ Wait (4.5 a 7s): " .. waitEntrega .. "s para entregar...")
                     task.wait(waitEntrega)
@@ -297,7 +297,7 @@ getgenv().DeliveryLoop = task.spawn(function()
                     task.wait(0.2)
                     fRem("AttemptDeliveryComplete")
                     
-                    -- Intervalo de 2 a 5 segundos
+                    -- Intervalo de 2 a 5 segundos antes de puxar a próxima
                     local waitIntervalo = math.random(20, 50) / 10
                     logMsg("⏱️ Interval (2 a 5s): " .. waitIntervalo .. "s para puxar a próxima...")
                     task.wait(waitIntervalo)
