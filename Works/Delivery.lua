@@ -285,11 +285,9 @@ getgenv().DeliveryLoop = task.spawn(function()
                 end
             end
             if pad then
-                -- Boneco agora TELEPORTA PARA O CENTRO primeiro, para o timer ser real
                 logMsg("Moving to center to start route (" .. mode .. ")...")
                 SmartTeleport(pad.Parent.Position, false)
                 
-                -- Começa as requisições APÓS chegar no centro
                 fRem("RequestStartJobSession", "Delivery", "jobPad", mode)
                 task.wait(0.5)
                 fRem("AttemptDeliveryPickup")
@@ -297,7 +295,6 @@ getgenv().DeliveryLoop = task.spawn(function()
                 local selectedWait = math.random(80, 130) / 10
                 logMsg("Arrived at center. Collection timer STARTED: " .. selectedWait .. "s")
                 
-                -- CRONÔMETRO EXATO COM TICK PARA APARECER NO LOG
                 local startTime = tick()
                 task.wait(selectedWait)
                 local endTime = tick()
