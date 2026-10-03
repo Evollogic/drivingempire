@@ -29,7 +29,7 @@ local function logMsg(msg)
     end
 end
 
-logMsg("🔥 VERSÃO NOVA 9-12s CARREGADA 🔥")
+logMsg("🔥 VERSÃO TIMERS AJUSTADOS (Entrega: 4.5-7s | Intervalo: 2-5s) 🔥")
 logMsg("🛡️ Anti-Fling & Anti-Sit Engine loaded. Waiting for events...")
 
 -- =========================================================================
@@ -89,11 +89,6 @@ end)
 -- =========================================================================
 -- FUNÇÕES DE SUPORTE
 -- =========================================================================
-local function rWait(min, max)
-    local waitTime = math.random(min * 100, max * 100) / 100
-    task.wait(waitTime)
-end
-
 local function fRem(n,...)
     local r = remotes:FindFirstChild(n)
     if not r then return end
@@ -278,36 +273,14 @@ getgenv().DeliveryLoop = task.spawn(function()
             local modeStr = getgenv().DeliveryMode
             local mode = (modeStr == "Hard" or modeStr == "HighRisk") and "HighRisk" or "Safe"
 
-            local pad = nil
-            for _,v in pairs(ws:GetDescendants()) do
-                if v:IsA("ProximityPrompt") and v.Name == "JobPadPrompt" then
-                    pad = v
-                    break
-                end
-            end
-            if pad then
-                logMsg("🏃 Moving to center to start route (" .. mode .. ")...")
-                SmartTeleport(pad.Parent.Position, false)
-
-                fRem("RequestStartJobSession", "Delivery", "jobPad", mode)
-                task.wait(0.5)
-                fRem("AttemptDeliveryPickup")
-
-                -- TEMPO DE COLETA REAL (Entre 9 e 12 segundos)
-                local selectedWait = math.random(90, 120) / 10
-                logMsg("⏱️ Arrived at center. Collection timer STARTED: " .. selectedWait .. "s")
-
-                local startTime = tick()
-                task.wait(selectedWait)
-                local endTime = tick()
-                local timePassed = endTime - startTime
-
-                logMsg("✅ Timer FINISHED! Time passed: " .. string.format("%.2f", timePassed) .. " seconds")
-
-                getgenv().JobPhase = "Farming"
-            else
-                task.wait(2)
-            end
+            logMsg("📡 Starting job remotely (" .. mode .. ")...")
+            fRem("RequestStartJobSession", "Delivery", "jobPad", mode)
+            task.wait(0.5)
+            fRem("AttemptDeliveryPickup")
+            task.wait(0.5)
+            
+            logMsg("✅ Job started. Proceeding to first delivery.")
+            getgenv().JobPhase = "Farming"
 
         elseif getgenv().JobPhase == "Farming" then
             local t = ws:FindFirstChild("DeliveryTargetAnchor")
@@ -315,10 +288,19 @@ getgenv().DeliveryLoop = task.spawn(function()
                 if t ~= getgenv().LastAnchor then
                     SmartTeleport(t.Position, true)
 
+                    -- Tempo entre 4,5 e 7 segundos
+                    local waitEntrega = math.random(45, 70) / 10
+                    logMsg("⏳ Wait (4.5 a 7s): " .. waitEntrega .. "s para entregar...")
+                    task.wait(waitEntrega)
+
                     fRem("AttemptDeliveryComplete")
                     task.wait(0.2)
                     fRem("AttemptDeliveryComplete")
-                    task.wait(0.3)
+                    
+                    -- Intervalo de 2 a 5 segundos
+                    local waitIntervalo = math.random(20, 50) / 10
+                    logMsg("⏱️ Interval (2 a 5s): " .. waitIntervalo .. "s para puxar a próxima...")
+                    task.wait(waitIntervalo)
 
                     fRem("AttemptDeliveryPickup")
                     getgenv().LastAnchor = t
