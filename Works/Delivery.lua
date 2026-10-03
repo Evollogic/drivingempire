@@ -292,8 +292,8 @@ getgenv().DeliveryLoop = task.spawn(function()
                 task.wait(0.5)
                 fRem("AttemptDeliveryPickup")
                 
-                -- Ajustado para 13 a 17 segundos
-                local selectedWait = math.random(130, 170) / 10
+                -- Ajustado para 2 a 5 segundos
+                local selectedWait = math.random(20, 50) / 10
                 logMsg("Arrived at center. Collection timer STARTED: " .. selectedWait .. "s")
                 
                 local startTime = tick()
