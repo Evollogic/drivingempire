@@ -2,7 +2,7 @@ local coreGui = game:GetService("CoreGui")
 local uis = game:GetService("UserInputService")
 local vim = game:GetService("VirtualInputManager")
 
--- Limpa a GUI se ela já estiver aberta na tela (para não duplicar quando você testar)
+-- Limpa a GUI se ela já estiver aberta
 for _, v in pairs(coreGui:GetChildren()) do
     if v.Name == "DevClickerUI" then v:Destroy() end
 end
@@ -12,14 +12,25 @@ sg.Name = "DevClickerUI"
 sg.Parent = coreGui
 
 -- =========================================================================
--- OBJETO LOCAL 1: O Painel Principal (A base da GUI)
+-- FUNÇÃO PARA ENVIAR MENSAGENS PARA O DEV LOG DO HUB
+-- =========================================================================
+local function logMsg(msg)
+    if getgenv().LogMsg then
+        getgenv().LogMsg("AutoClicker: " .. tostring(msg))
+    else
+        print("AutoClicker: " .. tostring(msg))
+    end
+end
+
+-- =========================================================================
+-- OBJETO LOCAL 1: O Painel Principal
 -- =========================================================================
 local mainFrame = Instance.new("Frame", sg)
 mainFrame.Size = UDim2.new(0, 200, 0, 100)
 mainFrame.Position = UDim2.new(0.5, -100, 0.5, -50)
 mainFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 25)
-mainFrame.Active = true -- Permite interação
-mainFrame.Draggable = true -- Deixa a janela arrastável pelo mouse/dedo
+mainFrame.Active = true 
+mainFrame.Draggable = true 
 Instance.new("UICorner", mainFrame).CornerRadius = UDim.new(0, 10)
 Instance.new("UIStroke", mainFrame).Color = Color3.fromRGB(0, 255, 255)
 
@@ -45,35 +56,40 @@ toggleBtn.TextSize = 12
 Instance.new("UICorner", toggleBtn).CornerRadius = UDim.new(0, 6)
 
 -- =========================================================================
--- LÓGICA DO CLIQUE AUTOMÁTICO
+-- LÓGICA DO CLIQUE AUTOMÁTICO COM LOGS
 -- =========================================================================
 local isClicking = false
 
 toggleBtn.MouseButton1Click:Connect(function()
-    -- Inverte o estado atual (Se for false vira true, se for true vira false)
     isClicking = not isClicking
 
     if isClicking then
         toggleBtn.Text = "AUTO CLICK: ON"
-        toggleBtn.BackgroundColor3 = Color3.fromRGB(200, 50, 50) -- Fica vermelho pra indicar que tá rodando
+        toggleBtn.BackgroundColor3 = Color3.fromRGB(200, 50, 50) 
+        
+        logMsg("🟢 Ligado! Iniciando cliques...")
         
         task.spawn(function()
             while isClicking do
                 -- Pega a posição atual do mouse na tela
                 local mousePos = uis:GetMouseLocation()
                 
-                -- Simula Pressionar o botão do mouse
+                -- Simula Pressionar o botão
                 vim:SendMouseButtonEvent(mousePos.X, mousePos.Y, 0, true, game, 0)
                 task.wait(0.01)
-                -- Simula Soltar o botão do mouse
+                -- Simula Soltar o botão
                 vim:SendMouseButtonEvent(mousePos.X, mousePos.Y, 0, false, game, 0)
                 
-                -- Velocidade do Auto Click (0.1 = 10 cliques por segundo)
-                task.wait(0.1) 
+                -- Imprime no terminal de logs do Hub a posição exata do clique
+                logMsg("🖱️ Clique em -> X: " .. math.floor(mousePos.X) .. " | Y: " .. math.floor(mousePos.Y))
+                
+                -- Velocidade do Auto Click (0.5s para você conseguir ler os logs sem travar a tela)
+                task.wait(0.5) 
             end
         end)
     else
         toggleBtn.Text = "AUTO CLICK: OFF"
-        toggleBtn.BackgroundColor3 = Color3.fromRGB(50, 200, 50) -- Fica verde indicando que parou
+        toggleBtn.BackgroundColor3 = Color3.fromRGB(50, 200, 50) 
+        logMsg("🔴 Desligado!")
     end
 end)
