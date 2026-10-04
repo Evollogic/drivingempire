@@ -604,3 +604,32 @@ task.spawn(function()
         pcall(function() loadstring(game:HttpGet("https://raw.githubusercontent.com/Evollogic/drivingempire/main/Auto/autohop.lua?t="..os.time()))() end)
     end
 end)
+
+-- ==========================================
+-- AUTO-PLAY NA TELA INICIAL
+-- ==========================================
+task.spawn(function()
+    pcall(function()
+        local loadingUI = lp.PlayerGui:WaitForChild("LoadingUI", 5)
+        if loadingUI then
+            local menu = loadingUI:FindFirstChild("Menu")
+            if menu then
+                local main = menu:FindFirstChild("Main")
+                if main then
+                    local playBtn = main:FindFirstChild("Play")
+                    if playBtn and getconnections then
+                        for _, conn in pairs(getconnections(playBtn.MouseButton1Click)) do
+                            pcall(function() conn.Function() end)
+                        end
+                        for _, conn in pairs(getconnections(playBtn.Activated)) do
+                            pcall(function() conn.Function() end)
+                        end
+                        if getgenv().LogMsg then
+                            getgenv().LogMsg("Auto-Play ativado com sucesso!")
+                        end
+                    end
+                end
+            end
+        end
+    end)
+end)
