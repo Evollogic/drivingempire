@@ -3,7 +3,6 @@ local plyrs = game:GetService("Players")
 local uis = game:GetService("UserInputService")
 local lp = plyrs.LocalPlayer
 
--- Limpa a GUI se ela já estiver aberta
 for _, v in pairs(coreGui:GetChildren()) do
     if v.Name == "DevClickerUI" then v:Destroy() end
 end
@@ -12,14 +11,8 @@ local sg = Instance.new("ScreenGui")
 sg.Name = "DevClickerUI"
 sg.Parent = coreGui
 
--- =========================================================================
--- VARIÁVEIS DE LOG
--- =========================================================================
 local allLogs = {}
 
--- =========================================================================
--- PAINEL PRINCIPAL (BOTÕES)
--- =========================================================================
 local mainFrame = Instance.new("Frame", sg)
 mainFrame.Size = UDim2.new(0, 200, 0, 140)
 mainFrame.Position = UDim2.new(0.5, -350, 0.5, -50)
@@ -57,11 +50,8 @@ logToggleBtn.Font = Enum.Font.GothamBold
 logToggleBtn.TextSize = 12
 Instance.new("UICorner", logToggleBtn).CornerRadius = UDim.new(0, 6)
 
--- =========================================================================
--- PAINEL DE TERMINAL
--- =========================================================================
 local termFrame = Instance.new("Frame", sg)
-termFrame.Size = UDim2.new(0, 320, 0, 280)
+termFrame.Size = UDim2.new(0, 350, 0, 300)
 termFrame.Position = UDim2.new(0.5, -100, 0.5, -50)
 termFrame.BackgroundColor3 = Color3.fromRGB(15, 15, 18)
 termFrame.Visible = true
@@ -115,9 +105,6 @@ termScroll.AutomaticCanvasSize = Enum.AutomaticSize.Y
 termScroll.ScrollBarThickness = 4
 local termList = Instance.new("UIListLayout", termScroll)
 
--- =========================================================================
--- FUNÇÃO DE ESCREVER NO TERMINAL
--- =========================================================================
 local function logMsg(msg)
     local t = os.date("%H:%M:%S") .. " | " .. tostring(msg)
     table.insert(allLogs, t)
@@ -135,11 +122,8 @@ local function logMsg(msg)
     termScroll.CanvasPosition = Vector2.new(0, termScroll.AbsoluteWindowSize.Y + 9999)
 end
 
-logMsg("Inspector GUI loaded. Turn ON and click any button in the game!")
+logMsg("Inspector GUI loaded. Turn ON and click a button!")
 
--- =========================================================================
--- FUNCIONAMENTO DOS BOTÕES
--- =========================================================================
 termCopyBtn.MouseButton1Click:Connect(function()
     if setclipboard then
         setclipboard(table.concat(allLogs, "\n"))
@@ -166,9 +150,6 @@ termCloseBtn.MouseButton1Click:Connect(function()
     logToggleBtn.Text = "SHOW LOGS"
 end)
 
--- =========================================================================
--- LÓGICA DO SPY (RADAR DE GUI)
--- =========================================================================
 local isSpying = false
 
 toggleBtn.MouseButton1Click:Connect(function()
@@ -177,7 +158,7 @@ toggleBtn.MouseButton1Click:Connect(function()
     if isSpying then
         toggleBtn.Text = "SPY MODE: ON"
         toggleBtn.BackgroundColor3 = Color3.fromRGB(200, 50, 50) 
-        logMsg("🟢 Modo Espião LIGADO! Clique em algo na tela do jogo.")
+        logMsg("🟢 Modo Espião LIGADO! Mapeando camadas...")
     else
         toggleBtn.Text = "SPY MODE: OFF"
         toggleBtn.BackgroundColor3 = Color3.fromRGB(50, 200, 50) 
@@ -185,27 +166,26 @@ toggleBtn.MouseButton1Click:Connect(function()
     end
 end)
 
--- Captura o input do usuário na tela
 uis.InputBegan:Connect(function(input, gameProcessed)
     if not isSpying then return end
     
-    -- Se for um clique do mouse ou um toque na tela do celular
     if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
         local pos = input.Position
-        
-        -- Procura quais elementos de interface estão exatamente naquele pixel
         local guisDetectadas = lp.PlayerGui:GetGuiObjectsAtPosition(pos.X, pos.Y)
         
         if #guisDetectadas > 0 then
-            -- O primeiro elemento da lista é o que está mais em cima (o botão em si)
-            local alvo = guisDetectadas[1]
+            logMsg("------ CLIQUE DETECTADO ------")
+            local layersExibidas = 0
             
-            -- Ignora a própria GUI do Inspector pra não poluir o log
-            if alvo:FindFirstAncestor("DevClickerUI") then return end
-            
-            logMsg("-------------------------")
-            logMsg("🔎 OBJETO: " .. alvo.Name .. " (" .. alvo.ClassName .. ")")
-            logMsg("📁 CAMINHO: " .. alvo:GetFullName())
+            for _, alvo in ipairs(guisDetectadas) do
+                if not alvo:FindFirstAncestor("DevClickerUI") then
+                    layersExibidas = layersExibidas + 1
+                    logMsg("[" .. layersExibidas .. "] 🔎 " .. alvo.Name .. " (" .. alvo.ClassName .. ")")
+                    logMsg("📁 " .. alvo:GetFullName())
+                    
+                    if layersExibidas >= 3 then break end
+                end
+            end
         end
     end
 end)
