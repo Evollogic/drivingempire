@@ -275,7 +275,7 @@ getgenv().DeliveryLoop = task.spawn(function()
                 task.wait(0.5)
                 fRem("AttemptDeliveryPickup")
                 
-                -- TEMPO DE COLETA NO CENTRO (Voltou para 9 a 12s)
+                -- TEMPO DE COLETA NO CENTRO (9 a 12s)
                 local selectedWait = math.random(90, 120) / 10
                 logMsg("Arrived at center. Collection timer STARTED: " .. selectedWait .. "s")
                 
@@ -308,11 +308,10 @@ getgenv().DeliveryLoop = task.spawn(function()
                     -- ====================================================================
                     -- TEMPO DE ESPERA NAS ENTREGAS DIRETAS (LOOP FARMING)
                     -- ====================================================================
-                    local tempoCasa = math.random(40, 70) / 10 -- Espera entre 4 e 7 segundos
+                    local tempoCasa = math.random(50, 70) / 10 -- Espera entre 5 e 7 segundos
                     logMsg("📦 Delivered! Waiting " .. tempoCasa .. "s before moving to next house...")
                     task.wait(tempoCasa)
                     
-                    -- Fallback para limpar a memória da casa antiga e não travar o loop
                     task.spawn(function()
                         task.wait(1.5)
                         if getgenv().LastAnchor == t then
