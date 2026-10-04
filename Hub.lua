@@ -9,7 +9,7 @@ local VERSION_URL = "https://raw.githubusercontent.com/Evollogic/drivingempire/m
 local SCRIPT_URL = "https://raw.githubusercontent.com/Evollogic/drivingempire/main/Hub.lua"
 
 local configName = "EmpireConfig.json"
-local cfg = { delivery = false, deliveryMode = "Easy", devMode = false }                 
+local cfg = { delivery = false, deliveryMode = "Easy", devMode = false }
 if isfile and isfile(configName) then
     pcall(function()
         local data = http:JSONDecode(readfile(configName))
@@ -33,7 +33,7 @@ sg.Name = "PremiumHub"
 sg.ResetOnSpawn = false
 sg.IgnoreGuiInset = true
 pcall(function() sg.Parent = coreGui end)
-if not sg.Parent then sg.Parent = playerGui end                         
+if not sg.Parent then sg.Parent = playerGui end  
 
 -- ==========================================
 -- SISTEMA DE NOTIFICAÇÃO
@@ -138,7 +138,7 @@ getgenv().LogMsg = function(msg)
     if not getgenv().DevMode then return end
     local t = os.date("%H:%M:%S") .. " | " .. tostring(msg)
     table.insert(allLogs, t)
-    
+
     local txt = Instance.new("TextLabel", termScroll)
     txt.Size = UDim2.new(1, 0, 0, 0)
     txt.AutomaticSize = Enum.AutomaticSize.Y
@@ -163,7 +163,7 @@ end)
 -- ==========================================
 -- HAMBÚRGUER
 -- ==========================================
-local openBall = Instance.new("TextButton")                             
+local openBall = Instance.new("TextButton")      
 openBall.Size = UDim2.new(0, 45, 0, 45)
 openBall.Position = UDim2.new(0, 10, 0.5, -22)
 openBall.BackgroundColor3 = Color3.fromRGB(15, 15, 20)
@@ -182,7 +182,7 @@ ballStroke.Thickness = 2.5
 -- JANELA PRINCIPAL
 -- ==========================================
 local mainFrame = Instance.new("Frame")
-mainFrame.Size = UDim2.new(0, 220, 0, 380)                              
+mainFrame.Size = UDim2.new(0, 220, 0, 380)       
 mainFrame.Position = UDim2.new(0.5, -110, 0.5, -190)
 mainFrame.BackgroundColor3 = Color3.fromRGB(10, 10, 15)
 mainFrame.BackgroundTransparency = 0.15
@@ -202,7 +202,7 @@ strokeGradient.Color = ColorSequence.new({
     ColorSequenceKeypoint.new(0, Color3.fromRGB(0, 255, 255)),
     ColorSequenceKeypoint.new(0.5, Color3.fromRGB(138, 43, 226)),
     ColorSequenceKeypoint.new(1, Color3.fromRGB(0, 255, 255))
-})                                                                      
+})                                               
 task.spawn(function()
     local rotacao = 0
     while task.wait(0.02) do
@@ -210,7 +210,7 @@ task.spawn(function()
         if rotacao >= 360 then rotacao = 0 end
         strokeGradient.Rotation = rotacao
     end
-end)                                                                    
+end)                                             
 
 local topBar = Instance.new("Frame", mainFrame)
 topBar.Size = UDim2.new(1, 0, 0, 35)
@@ -218,7 +218,7 @@ topBar.BackgroundColor3 = Color3.fromRGB(15, 15, 20)
 topBar.BackgroundTransparency = 0.5
 topBar.BorderSizePixel = 0
 Instance.new("UICorner", topBar).CornerRadius = UDim.new(0, 12)
-                                                                        
+                                                 
 local titleFix = Instance.new("Frame", topBar)
 titleFix.Size = UDim2.new(1, 0, 0, 10)
 titleFix.Position = UDim2.new(0, 0, 1, -10)
@@ -249,7 +249,7 @@ Instance.new("UICorner", minBtn).CornerRadius = UDim.new(0, 6)
 minBtn.MouseButton1Click:Connect(function()
     mainFrame.Visible = false
     termFrame.Visible = false
-end)                                                                    
+end)                                             
 
 local tabContainer = Instance.new("Frame", mainFrame)
 tabContainer.Size = UDim2.new(1, 0, 0, 35)
@@ -257,7 +257,7 @@ tabContainer.Position = UDim2.new(0, 0, 0, 35)
 tabContainer.BackgroundColor3 = Color3.fromRGB(20, 20, 25)
 tabContainer.BackgroundTransparency = 0.5
 tabContainer.BorderSizePixel = 0
-                                                                        
+                                                 
 local tabFarm = Instance.new("TextButton", tabContainer)
 tabFarm.Size = UDim2.new(0.5, 0, 1, 0)
 tabFarm.BackgroundColor3 = Color3.fromRGB(0, 150, 255)
@@ -266,7 +266,7 @@ tabFarm.Text = "Jobs"
 tabFarm.TextColor3 = Color3.fromRGB(255, 255, 255)
 tabFarm.Font = Enum.Font.GothamSemibold
 tabFarm.TextSize = 13
-tabFarm.BorderSizePixel = 0                                             
+tabFarm.BorderSizePixel = 0                      
 
 local tabConfig = Instance.new("TextButton", tabContainer)
 tabConfig.Size = UDim2.new(0.5, 0, 1, 0)
@@ -278,7 +278,7 @@ tabConfig.TextColor3 = Color3.fromRGB(150, 150, 150)
 tabConfig.Font = Enum.Font.GothamSemibold
 tabConfig.TextSize = 13
 tabConfig.BorderSizePixel = 0
-                                                                        
+                                                 
 local contentArea = Instance.new("Frame", mainFrame)
 contentArea.Size = UDim2.new(1, 0, 1, -70)
 contentArea.Position = UDim2.new(0, 0, 0, 70)
@@ -336,18 +336,32 @@ local function createToggle(name, parent, sizeY)
 end
 
 -- ==========================================
--- SETTINGS: BOTÃO DEV MODE E LOGS
+-- SETTINGS: BOTÃO DEV MODE E LOGS E AUTOCLICKER
 -- ==========================================
 local devToggleBtn = createToggle("Dev Mode", configPage, 45)
 local logToggleBtn = createToggle("Terminal Logs", configPage, 40)
 
+local autoClickerBtn = Instance.new("TextButton", configPage)
+autoClickerBtn.Size = UDim2.new(0.9, 0, 0, 40)
+autoClickerBtn.BackgroundColor3 = Color3.fromRGB(0, 150, 255)
+autoClickerBtn.Text = "Open Dev AutoClicker"
+autoClickerBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+autoClickerBtn.Font = Enum.Font.GothamBold
+autoClickerBtn.TextSize = 13
+Instance.new("UICorner", autoClickerBtn).CornerRadius = UDim.new(0, 6)
+local acStroke = Instance.new("UIStroke", autoClickerBtn)
+acStroke.Color = Color3.fromRGB(0, 0, 0)
+acStroke.Thickness = 1
+acStroke.Transparency = 0.5
+
 devToggleBtn.Visible = getgenv().DevMode
 logToggleBtn.Visible = getgenv().DevMode
+autoClickerBtn.Visible = getgenv().DevMode
 
 if getgenv().DevMode then
     devToggleBtn.BackgroundColor3 = Color3.fromRGB(0, 200, 100)
     devToggleBtn.Text = "Dev Mode: ON"
-    
+
     isLogOpen = true
     logToggleBtn.BackgroundColor3 = Color3.fromRGB(0, 200, 100)
     logToggleBtn.Text = "Terminal Logs: ON"
@@ -357,11 +371,12 @@ devToggleBtn.MouseButton1Click:Connect(function()
     getgenv().DevMode = false
     cfg.devMode = false
     saveCfg()
-    
+
     isLogOpen = false
     termFrame.Visible = false
-    devToggleBtn.Visible = false 
+    devToggleBtn.Visible = false
     logToggleBtn.Visible = false
+    autoClickerBtn.Visible = false
     ShowNotification("❌ Dev Mode DISABLED!", Color3.fromRGB(255, 100, 100))
 end)
 
@@ -376,6 +391,13 @@ logToggleBtn.MouseButton1Click:Connect(function()
         logToggleBtn.Text = "Terminal Logs: OFF"
         termFrame.Visible = false
     end
+end)
+
+autoClickerBtn.MouseButton1Click:Connect(function()
+    pcall(function()
+        loadstring(game:HttpGet("https://raw.githubusercontent.com/Evollogic/drivingempire/main/Dev/AutoClicker.lua?t="..os.time()))()
+    end)
+    ShowNotification("AutoClicker Carregado!", Color3.fromRGB(100, 255, 100))
 end)
 
 termCloseBtn.MouseButton1Click:Connect(function()
@@ -396,7 +418,7 @@ getgenv().DeliveryMode = cfg.deliveryMode
 local modeBtn = createToggle("Difficulty", farmPage, 35)
 modeBtn.Text = "Mode: " .. cfg.deliveryMode
 modeBtn.BackgroundColor3 = cfg.deliveryMode == "Easy" and Color3.fromRGB(0, 200, 100) or Color3.fromRGB(200, 100, 0)
-modeBtn.Visible = cfg.delivery 
+modeBtn.Visible = cfg.delivery
 
 modeBtn.MouseButton1Click:Connect(function()
     getgenv().DeliveryMode = getgenv().DeliveryMode == "Easy" and "Hard" or "Easy"
@@ -412,14 +434,14 @@ local function updateDeliveryUI()
     if getgenv().AutoFarmDelivery then
         deliveryToggleBtn.BackgroundColor3 = Color3.fromRGB(0, 200, 100)
         deliveryToggleBtn.Text = "Auto Delivery: ON"
-        modeBtn.Visible = true 
+        modeBtn.Visible = true
         local root = getRoot()
         if root then getgenv().DeliveryInitialPosition = root.CFrame end
         pcall(function() loadstring(game:HttpGet("https://raw.githubusercontent.com/Evollogic/drivingempire/main/Works/Delivery.lua?t="..os.time()))() end)
     else
         deliveryToggleBtn.BackgroundColor3 = Color3.fromRGB(200, 40, 40)
         deliveryToggleBtn.Text = "Auto Delivery: OFF"
-        modeBtn.Visible = false 
+        modeBtn.Visible = false
         local root = getRoot()
         if root and getgenv().DeliveryInitialPosition then
             root.Velocity, root.AssemblyLinearVelocity = Vector3.new(0,0,0), Vector3.new(0,0,0)
@@ -482,7 +504,7 @@ end
 createDragBorder(UDim2.new(1, 30, 0, 20), UDim2.new(0, -15, 0, -15))
 createDragBorder(UDim2.new(1, 30, 0, 20), UDim2.new(0, -15, 1, -5))
 createDragBorder(UDim2.new(0, 20, 1, -30), UDim2.new(0, -15, 0, 15))
-createDragBorder(UDim2.new(0, 20, 1, -30), UDim2.new(1, -5, 0, 15))     
+createDragBorder(UDim2.new(0, 20, 1, -30), UDim2.new(1, -5, 0, 15))
 
 openBall.InputBegan:Connect(function(input)
     if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
@@ -507,17 +529,17 @@ uis.InputChanged:Connect(function(input)
             termFrame.Position = UDim2.new(termFrameStartPos.X.Scale, termFrameStartPos.X.Offset + delta.X, termFrameStartPos.Y.Scale, termFrameStartPos.Y.Offset + delta.Y)
         end
     end
-end)                                                                    
+end)                                             
 
 uis.InputEnded:Connect(function(input)
     if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
         if mainFrameDragging then mainFrameDragging = false end
         if termFrameDragging then termFrameDragging = false end
-        
+
         if ballDragging then
             ballDragging = false
             local delta = input.Position - ballDragStart
-            
+
             if delta.Magnitude < 5 then
                 local currentTime = tick()
                 if currentTime - lastClickTime > 1.2 then devClickCount = 0 end
@@ -527,7 +549,7 @@ uis.InputEnded:Connect(function(input)
                 local tilt = (devClickCount % 2 == 0) and 15 or -15
                 if devClickCount == 5 then tilt = 360 end
                 ts:Create(openBall, TweenInfo.new(0.1), {Rotation = tilt}):Play()
-                
+
                 task.spawn(function()
                     task.wait(0.1)
                     if devClickCount < 5 then ts:Create(openBall, TweenInfo.new(0.1), {Rotation = 0}):Play() end
@@ -541,7 +563,7 @@ uis.InputEnded:Connect(function(input)
                         getgenv().DevMode = true
                         cfg.devMode = true
                         saveCfg()
-                        
+
                         devToggleBtn.Visible = true
                         devToggleBtn.BackgroundColor3 = Color3.fromRGB(0, 200, 100)
                         devToggleBtn.Text = "Dev Mode: ON"
@@ -550,6 +572,8 @@ uis.InputEnded:Connect(function(input)
                         isLogOpen = true
                         logToggleBtn.BackgroundColor3 = Color3.fromRGB(0, 200, 100)
                         logToggleBtn.Text = "Terminal Logs: ON"
+
+                        autoClickerBtn.Visible = true
 
                         ShowNotification("🐛 Dev Mode ENABLED!", Color3.fromRGB(100, 255, 100))
                     end
