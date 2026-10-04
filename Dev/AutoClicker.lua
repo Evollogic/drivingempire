@@ -12,22 +12,16 @@ sg.Name = "DevClickerUI"
 sg.Parent = coreGui
 
 -- =========================================================================
--- FUNÇÃO PARA ENVIAR MENSAGENS PARA O DEV LOG DO HUB
+-- VARIÁVEIS DE LOG
 -- =========================================================================
-local function logMsg(msg)
-    if getgenv().LogMsg then
-        getgenv().LogMsg("AutoClicker: " .. tostring(msg))
-    else
-        print("AutoClicker: " .. tostring(msg))
-    end
-end
+local allLogs = {}
 
 -- =========================================================================
--- OBJETO LOCAL 1: O Painel Principal
+-- PAINEL PRINCIPAL (BOTÕES)
 -- =========================================================================
 local mainFrame = Instance.new("Frame", sg)
-mainFrame.Size = UDim2.new(0, 200, 0, 100)
-mainFrame.Position = UDim2.new(0.5, -100, 0.5, -50)
+mainFrame.Size = UDim2.new(0, 200, 0, 140)
+mainFrame.Position = UDim2.new(0.5, -350, 0.5, -50)
 mainFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 25)
 mainFrame.Active = true 
 mainFrame.Draggable = true 
@@ -42,18 +36,134 @@ title.TextColor3 = Color3.fromRGB(255, 255, 255)
 title.Font = Enum.Font.GothamBold
 title.TextSize = 14
 
--- =========================================================================
--- OBJETO LOCAL 2: O Botão de Ligar/Desligar
--- =========================================================================
 local toggleBtn = Instance.new("TextButton", mainFrame)
 toggleBtn.Size = UDim2.new(0.8, 0, 0, 40)
-toggleBtn.Position = UDim2.new(0.1, 0, 0.4, 0)
+toggleBtn.Position = UDim2.new(0.1, 0, 0, 35)
 toggleBtn.BackgroundColor3 = Color3.fromRGB(50, 200, 50)
 toggleBtn.Text = "AUTO CLICK: OFF"
 toggleBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
 toggleBtn.Font = Enum.Font.GothamBold
 toggleBtn.TextSize = 12
 Instance.new("UICorner", toggleBtn).CornerRadius = UDim.new(0, 6)
+
+local logToggleBtn = Instance.new("TextButton", mainFrame)
+logToggleBtn.Size = UDim2.new(0.8, 0, 0, 40)
+logToggleBtn.Position = UDim2.new(0.1, 0, 0, 85)
+logToggleBtn.BackgroundColor3 = Color3.fromRGB(200, 150, 0)
+logToggleBtn.Text = "HIDE LOGS"
+logToggleBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+logToggleBtn.Font = Enum.Font.GothamBold
+logToggleBtn.TextSize = 12
+Instance.new("UICorner", logToggleBtn).CornerRadius = UDim.new(0, 6)
+
+-- =========================================================================
+-- PAINEL DE TERMINAL (IGUAL AO DO HUB)
+-- =========================================================================
+local termFrame = Instance.new("Frame", sg)
+termFrame.Size = UDim2.new(0, 320, 0, 280)
+termFrame.Position = UDim2.new(0.5, -100, 0.5, -50)
+termFrame.BackgroundColor3 = Color3.fromRGB(15, 15, 18)
+termFrame.Visible = true
+termFrame.Active = true
+termFrame.Draggable = true
+Instance.new("UICorner", termFrame).CornerRadius = UDim.new(0, 6)
+Instance.new("UIStroke", termFrame).Color = Color3.fromRGB(80, 80, 90)
+
+local termTop = Instance.new("Frame", termFrame)
+termTop.Size = UDim2.new(1, 0, 0, 35)
+termTop.BackgroundColor3 = Color3.fromRGB(20, 20, 25)
+termTop.BorderSizePixel = 0
+Instance.new("UICorner", termTop).CornerRadius = UDim.new(0, 6)
+
+local termTitle = Instance.new("TextLabel", termTop)
+termTitle.Size = UDim2.new(0.5, 0, 1, 0)
+termTitle.Position = UDim2.new(0, 10, 0, 0)
+termTitle.BackgroundTransparency = 1
+termTitle.Text = "📟 Logs"
+termTitle.TextColor3 = Color3.fromRGB(100, 255, 100)
+termTitle.Font = Enum.Font.GothamBold
+termTitle.TextSize = 14
+termTitle.TextXAlignment = Enum.TextXAlignment.Left
+
+local termCopyBtn = Instance.new("TextButton", termTop)
+termCopyBtn.Size = UDim2.new(0, 60, 0, 25)
+termCopyBtn.Position = UDim2.new(1, -105, 0, 5)
+termCopyBtn.BackgroundColor3 = Color3.fromRGB(50, 120, 50)
+termCopyBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+termCopyBtn.Font = Enum.Font.GothamBold
+termCopyBtn.TextSize = 12
+termCopyBtn.Text = "COPY"
+Instance.new("UICorner", termCopyBtn).CornerRadius = UDim.new(0, 4)
+
+local termCloseBtn = Instance.new("TextButton", termTop)
+termCloseBtn.Size = UDim2.new(0, 30, 0, 25)
+termCloseBtn.Position = UDim2.new(1, -35, 0, 5)
+termCloseBtn.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
+termCloseBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+termCloseBtn.Font = Enum.Font.GothamBold
+termCloseBtn.TextSize = 12
+termCloseBtn.Text = "X"
+Instance.new("UICorner", termCloseBtn).CornerRadius = UDim.new(0, 4)
+
+local termScroll = Instance.new("ScrollingFrame", termFrame)
+termScroll.Size = UDim2.new(1, -10, 1, -45)
+termScroll.Position = UDim2.new(0, 5, 0, 40)
+termScroll.BackgroundTransparency = 1
+termScroll.CanvasSize = UDim2.new(0, 0, 0, 0)
+termScroll.AutomaticCanvasSize = Enum.AutomaticSize.Y
+termScroll.ScrollBarThickness = 4
+local termList = Instance.new("UIListLayout", termScroll)
+
+-- =========================================================================
+-- FUNÇÃO DE ESCREVER NO TERMINAL
+-- =========================================================================
+local function logMsg(msg)
+    local t = os.date("%H:%M:%S") .. " | " .. tostring(msg)
+    table.insert(allLogs, t)
+    
+    local txt = Instance.new("TextLabel", termScroll)
+    txt.Size = UDim2.new(1, 0, 0, 0)
+    txt.AutomaticSize = Enum.AutomaticSize.Y
+    txt.BackgroundTransparency = 1
+    txt.TextColor3 = Color3.fromRGB(180, 180, 180)
+    txt.TextSize = 12
+    txt.TextXAlignment = Enum.TextXAlignment.Left
+    txt.TextWrapped = true
+    txt.Text = t
+    
+    termScroll.CanvasPosition = Vector2.new(0, termScroll.AbsoluteWindowSize.Y + 9999)
+end
+
+logMsg("Dev AutoClicker GUI loaded. Waiting for events...")
+
+-- =========================================================================
+-- FUNCIONAMENTO DOS BOTÕES DA GUI
+-- =========================================================================
+termCopyBtn.MouseButton1Click:Connect(function()
+    if setclipboard then
+        setclipboard(table.concat(allLogs, "\n"))
+        termCopyBtn.Text = "OK!"
+        task.wait(1)
+        termCopyBtn.Text = "COPY"
+    end
+end)
+
+logToggleBtn.MouseButton1Click:Connect(function()
+    termFrame.Visible = not termFrame.Visible
+    if termFrame.Visible then
+        logToggleBtn.BackgroundColor3 = Color3.fromRGB(200, 150, 0)
+        logToggleBtn.Text = "HIDE LOGS"
+    else
+        logToggleBtn.BackgroundColor3 = Color3.fromRGB(100, 100, 100)
+        logToggleBtn.Text = "SHOW LOGS"
+    end
+end)
+
+termCloseBtn.MouseButton1Click:Connect(function()
+    termFrame.Visible = false
+    logToggleBtn.BackgroundColor3 = Color3.fromRGB(100, 100, 100)
+    logToggleBtn.Text = "SHOW LOGS"
+end)
 
 -- =========================================================================
 -- LÓGICA DO CLIQUE AUTOMÁTICO COM LOGS
@@ -71,19 +181,14 @@ toggleBtn.MouseButton1Click:Connect(function()
         
         task.spawn(function()
             while isClicking do
-                -- Pega a posição atual do mouse na tela
                 local mousePos = uis:GetMouseLocation()
                 
-                -- Simula Pressionar o botão
                 vim:SendMouseButtonEvent(mousePos.X, mousePos.Y, 0, true, game, 0)
                 task.wait(0.01)
-                -- Simula Soltar o botão
                 vim:SendMouseButtonEvent(mousePos.X, mousePos.Y, 0, false, game, 0)
                 
-                -- Imprime no terminal de logs do Hub a posição exata do clique
                 logMsg("🖱️ Clique em -> X: " .. math.floor(mousePos.X) .. " | Y: " .. math.floor(mousePos.Y))
                 
-                -- Velocidade do Auto Click (0.5s para você conseguir ler os logs sem travar a tela)
                 task.wait(0.5) 
             end
         end)
