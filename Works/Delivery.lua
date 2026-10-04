@@ -13,6 +13,12 @@ end
 if getgenv().AntiSeatLoop then
     getgenv().AntiSeatLoop:Disconnect()
 end
+if getgenv().AntiAfkConnection then
+    getgenv().AntiAfkConnection:Disconnect()
+end
+if getgenv().AntiAfkLoop then
+    pcall(task.cancel, getgenv().AntiAfkLoop)
+end
 
 getgenv().AutoFarmDelivery = true
 getgenv().JobPhase = "Init"
@@ -30,6 +36,34 @@ local function logMsg(msg)
 end
 
 logMsg("Anti-Fling & Anti-Sit Engine loaded. Waiting for events...")
+
+-- =========================================================================
+-- SISTEMA ANTI-AFK SUPREMO (BURLA O ROBLOX E O JOGO)
+-- =========================================================================
+local vu = game:GetService("VirtualUser")
+local vim = game:GetService("VirtualInputManager")
+
+-- 1. Interceção de Emergência (Gatilho do Roblox de 20 min)
+getgenv().AntiAfkConnection = lp.Idled:Connect(function()
+    if getgenv().AutoFarmDelivery then
+        vu:CaptureController()
+        vu:ClickButton2(Vector2.new())
+        logMsg("⚠️ Anti-AFK (Roblox): Simulando toque para evitar desconexão padrão.")
+    end
+end)
+
+-- 2. Prevenção Ativa (A cada 8 minutos para burlar o Servidor AFK do Driving Empire)
+getgenv().AntiAfkLoop = task.spawn(function()
+    while task.wait(480) do
+        if getgenv().AutoFarmDelivery then
+            -- Simula o pressionar e soltar da tecla F15 (Não afeta nada no jogo)
+            vim:SendKeyEvent(true, Enum.KeyCode.F15, false, game)
+            task.wait(0.1)
+            vim:SendKeyEvent(false, Enum.KeyCode.F15, false, game)
+            logMsg("🛡️ Anti-AFK (Jogo): Tecla fantasma (F15) simulada para manter ativo.")
+        end
+    end
+end)
 
 -- =========================================================================
 -- SISTEMA ANTI-SENTADA E ANTI-TRAVA (EMERGÊNCIA)
@@ -110,10 +144,10 @@ local function simularBotao(nomeBotao, pressionar)
     local btn = lp.PlayerGui:FindFirstChild(nomeBotao, true)
     if btn then
         pcall(function()
-            local vim = game:GetService("VirtualInputManager")
+            local vimCentro = game:GetService("VirtualInputManager")
             local centroX = btn.AbsolutePosition.X + (btn.AbsoluteSize.X / 2)
             local centroY = btn.AbsolutePosition.Y + (btn.AbsoluteSize.Y / 2)
-            vim:SendMouseButtonEvent(centroX, centroY, 0, pressionar, game, 0)
+            vimCentro:SendMouseButtonEvent(centroX, centroY, 0, pressionar, game, 0)
         end)
         if getconnections then
             local estado = pressionar and Enum.UserInputState.Begin or Enum.UserInputState.End
@@ -272,9 +306,7 @@ getgenv().DeliveryLoop = task.spawn(function()
                 logMsg("Moving to center to start route (" .. mode .. ")...")
                 SmartTeleport(padPos, false)
                 
-                -- ====================================================================
-                -- CHECAGEM DE DISTÂNCIA: SÓ INICIA SE O BONECO CHEGOU DE VERDADE
-                -- ====================================================================
+                -- CHECAGEM DE DISTÂNCIA
                 local chegouNoCentro = false
                 local waitLimit = 0
                 
@@ -296,7 +328,6 @@ getgenv().DeliveryLoop = task.spawn(function()
                     task.wait(0.5)
                     fRem("AttemptDeliveryPickup")
                     
-                    -- TEMPO DE COLETA NO CENTRO (9 a 12s)
                     local selectedWait = math.random(90, 120) / 10
                     logMsg("Collection timer STARTED: " .. selectedWait .. "s")
                     
@@ -321,7 +352,6 @@ getgenv().DeliveryLoop = task.spawn(function()
                 if t ~= getgenv().LastAnchor then
                     SmartTeleport(t.Position, true)
                     
-                    -- ENTREGA NA CASA
                     fRem("AttemptDeliveryComplete")
                     task.wait(0.2)
                     fRem("AttemptDeliveryComplete")
@@ -330,9 +360,6 @@ getgenv().DeliveryLoop = task.spawn(function()
                     fRem("AttemptDeliveryPickup")
                     getgenv().LastAnchor = t
                     
-                    -- ====================================================================
-                    -- TEMPO DE ESPERA NAS ENTREGAS DIRETAS (LOOP FARMING) (5 a 7s)
-                    -- ====================================================================
                     local tempoCasa = math.random(50, 70) / 10
                     logMsg("📦 Delivered! Waiting " .. tempoCasa .. "s before moving to next house...")
                     task.wait(tempoCasa)
