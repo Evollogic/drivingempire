@@ -268,24 +268,49 @@ getgenv().DeliveryLoop = task.spawn(function()
                 end
             end
             if pad then
+                local padPos = pad.Parent.Position
                 logMsg("Moving to center to start route (" .. mode .. ")...")
-                SmartTeleport(pad.Parent.Position, false)
+                SmartTeleport(padPos, false)
                 
-                fRem("RequestStartJobSession", "Delivery", "jobPad", mode)
-                task.wait(0.5)
-                fRem("AttemptDeliveryPickup")
+                -- ====================================================================
+                -- CHECAGEM DE DISTÂNCIA: SÓ INICIA SE O BONECO CHEGOU DE VERDADE
+                -- ====================================================================
+                local chegouNoCentro = false
+                local waitLimit = 0
                 
-                -- TEMPO DE COLETA NO CENTRO (9 a 12s)
-                local selectedWait = math.random(90, 120) / 10
-                logMsg("Arrived at center. Collection timer STARTED: " .. selectedWait .. "s")
+                logMsg("Verifying physical arrival at the center pad...")
+                while waitLimit < 40 do
+                    local c, rt, hum = getChar()
+                    if rt and (rt.Position * Vector3.new(1,0,1) - padPos * Vector3.new(1,0,1)).Magnitude < 25 then
+                        chegouNoCentro = true
+                        break
+                    end
+                    waitLimit = waitLimit + 1
+                    task.wait(0.25)
+                end
                 
-                local startTime = tick()
-                task.wait(selectedWait)
-                local endTime = tick()
-                
-                logMsg("✅ Timer FINISHED! Time passed: " .. string.format("%.2f", (endTime - startTime)) .. "s")
-                
-                getgenv().JobPhase = "Farming"
+                if chegouNoCentro then
+                    logMsg("Arrival confirmed. Requesting job and starting collection timer.")
+                    
+                    fRem("RequestStartJobSession", "Delivery", "jobPad", mode)
+                    task.wait(0.5)
+                    fRem("AttemptDeliveryPickup")
+                    
+                    -- TEMPO DE COLETA NO CENTRO (9 a 12s)
+                    local selectedWait = math.random(90, 120) / 10
+                    logMsg("Collection timer STARTED: " .. selectedWait .. "s")
+                    
+                    local startTime = tick()
+                    task.wait(selectedWait)
+                    local endTime = tick()
+                    
+                    logMsg("✅ Timer FINISHED! Time passed: " .. string.format("%.2f", (endTime - startTime)) .. "s")
+                    
+                    getgenv().JobPhase = "Farming"
+                else
+                    logMsg("⚠️ Warning: Failed to reach the center pad in time. Retrying...")
+                    task.wait(2)
+                end
             else
                 task.wait(2)
             end
@@ -306,9 +331,9 @@ getgenv().DeliveryLoop = task.spawn(function()
                     getgenv().LastAnchor = t
                     
                     -- ====================================================================
-                    -- TEMPO DE ESPERA NAS ENTREGAS DIRETAS (LOOP FARMING)
+                    -- TEMPO DE ESPERA NAS ENTREGAS DIRETAS (LOOP FARMING) (5 a 7s)
                     -- ====================================================================
-                    local tempoCasa = math.random(50, 70) / 10 -- Espera entre 5 e 7 segundos
+                    local tempoCasa = math.random(50, 70) / 10
                     logMsg("📦 Delivered! Waiting " .. tempoCasa .. "s before moving to next house...")
                     task.wait(tempoCasa)
                     
