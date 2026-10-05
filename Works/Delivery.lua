@@ -11,8 +11,8 @@ local function logMsg(msg)
     if getgenv().LogMsg then getgenv().LogMsg(msg) else print("Delivery: " .. tostring(msg)) end
 end
 
-logMsg("Motor V16: Chão invisível restaurado. Fim do limbo debaixo do mapa!")
-task.wait(2)
+logMsg("Motor V17: Teleporte Congelado Anti-Queda e Inicialização Corrigida!")
+task.wait(3)
 
 pcall(function() ws.FallenPartsDestroyHeight = -50000 end)
 
@@ -82,9 +82,7 @@ getgenv().NoclipLoop = game:GetService("RunService").Stepped:Connect(function()
             local car = hum.SeatPart:FindFirstAncestorWhichIsA("Model")
             if car and car ~= c then
                 for _, p in pairs(car:GetDescendants()) do
-                    if p:IsA("BasePart") then
-                        p.CanCollide = false
-                    end
+                    if p:IsA("BasePart") then p.CanCollide = false end
                 end
             end
         end
@@ -103,53 +101,99 @@ local function getChar()
     return c, (c and c:FindFirstChild("HumanoidRootPart")), (c and c:FindFirstChild("Humanoid"))
 end
 
-local function SmartTeleport(targetPos)
-    local c, rt, hum = getChar()
-    local car = nil
-    if hum and hum.SeatPart then
-        local seatModel = hum.SeatPart:FindFirstAncestorWhichIsA("Model")
-        if seatModel and seatModel ~= c then car = seatModel end
+local function lerPreenchimentoBarra()
+    local c = lp.Character
+    if not c then return 0 end
+    local head = c:FindFirstChild("Head")
+    if not head then return 0 end
+    local bbg = head:FindFirstChild("CharacterBillboard")
+    if not bbg then return 0 end
+    
+    local packageBar = bbg:FindFirstChild("PackageBarFrame", true)
+    if packageBar and packageBar.Visible then
+        local fill = packageBar:FindFirstChild("Fill", true)
+        if fill and fill:IsA("Frame") then
+            return fill.Size.X.Scale
+        end
     end
+    return 0
+end
 
-    if car then
-        local cPart = car.PrimaryPart or car:FindFirstChildWhichIsA("BasePart", true)
-        local allVehicleParts = cPart:GetConnectedParts(true)
-        local destCFrame = CFrame.new(targetPos + Vector3.new(0, 5, 0))
-        
-        for i = 1, 15 do
-            car:PivotTo(destCFrame)
-            for _, p in pairs(allVehicleParts) do
-                p.AssemblyLinearVelocity = Vector3.zero
-                p.AssemblyAngularVelocity = Vector3.zero
-            end
-            task.wait()
-        end
-        task.wait(0.5)
-    else
-        if rt and hum then
-            -- CHÃO FALSO RESTAURADO: Evita cair no void enquanto o mapa não carrega.
-            local tempFloor = Instance.new("Part")
-            tempFloor.Anchored = true
-            tempFloor.CanCollide = true
-            tempFloor.Transparency = 1
-            tempFloor.Size = Vector3.new(150, 2, 150)
-            tempFloor.Position = Vector3.new(targetPos.X, targetPos.Y - 2, targetPos.Z)
-            tempFloor.Parent = ws
-            game:GetService("Debris"):AddItem(tempFloor, 5) -- Segura o boneco por 5s
-            
-            rt.Velocity = Vector3.zero
-            rt.CFrame = CFrame.new(targetPos + Vector3.new(0, 6, 0))
-            hum.PlatformStand = false
-            hum.Sit = false
-            task.wait(0.5)
-        end
+-- =========================================================================
+-- FUNÇÃO 1: TELEPORTE E CAMINHADA (SÓ PARA INICIAR NO PAD)
+-- =========================================================================
+local function TeleportAndWalk(targetPos)
+    local c, rt, hum = getChar()
+    if not (rt and hum) then return end
+
+    local flatCurrent = Vector3.new(rt.Position.X, 0, rt.Position.Z)
+    local flatTarget = Vector3.new(targetPos.X, 0, targetPos.Z)
+    local dir = Vector3.new(1, 0, 0)
+    if (flatCurrent - flatTarget).Magnitude > 1 then dir = (flatCurrent - flatTarget).Unit end
+    
+    local charOffset = math.random(35, 45)
+    local startPos = Vector3.new(targetPos.X + (dir.X * charOffset), targetPos.Y + 3.5, targetPos.Z + (dir.Z * charOffset))
+    
+    local tempFloor = Instance.new("Part")
+    tempFloor.Anchored = true; tempFloor.CanCollide = true; tempFloor.Transparency = 1
+    tempFloor.Size = Vector3.new(200, 5, 200)
+    tempFloor.Position = Vector3.new(targetPos.X, targetPos.Y - 2.5, targetPos.Z)
+    tempFloor.Parent = ws
+    game:GetService("Debris"):AddItem(tempFloor, 15)
+    
+    rt.AssemblyLinearVelocity = Vector3.zero
+    rt.CFrame = CFrame.new(startPos)
+    hum.PlatformStand = false; hum.Sit = false; hum:ChangeState(Enum.HumanoidStateType.Running)
+    task.wait(0.2)
+    
+    hum:MoveTo(targetPos)
+    local timeOut = 0
+    while timeOut < 100 do 
+        if rt.Position.Y - targetPos.Y < -15 then break end
+        if (rt.Position * Vector3.new(1,0,1) - targetPos * Vector3.new(1,0,1)).Magnitude < 4.0 then break end
+        timeOut = timeOut + 1
+        task.wait(0.1)
     end
+end
+
+-- =========================================================================
+-- FUNÇÃO 2: TELEPORTE DIRETO CONGELADO (SÓ PARA ENTREGAR NA CASA)
+-- =========================================================================
+local function TeleportDirectSafely(targetPos)
+    local c, rt, hum = getChar()
+    if not (rt and hum) then return end
+
+    -- Chão absurdo de grosso para garantir
+    local tempFloor = Instance.new("Part")
+    tempFloor.Name = "SafeFloor"
+    tempFloor.Size = Vector3.new(300, 10, 300)
+    tempFloor.Position = targetPos - Vector3.new(0, 5, 0)
+    tempFloor.Anchored = true
+    tempFloor.CanCollide = true
+    tempFloor.Transparency = 1
+    tempFloor.Parent = ws
+    game:GetService("Debris"):AddItem(tempFloor, 8)
+
+    -- Congela o personagem totalmente durante o teleporte
+    rt.AssemblyLinearVelocity = Vector3.zero
+    rt.AssemblyAngularVelocity = Vector3.zero
+    hum.PlatformStand = false
+    hum.Sit = false
+
+    rt.CFrame = CFrame.new(targetPos + Vector3.new(0, 6, 0))
+    rt.Anchored = true -- TRAVA O BONECO NO AR
+
+    -- Espera 0.8s para o mapa do jogo renderizar e o chão existir de verdade
+    task.wait(0.8)
+
+    rt.Anchored = false -- SOLTA O BONECO EM SEGURANÇA
 end
 
 getgenv().DeliveryLoop = task.spawn(function()
     while task.wait(0.2) do
         if not getgenv().AutoFarmDelivery then break end
         
+        -- Bypass se o jogador já tiver iniciado manualmente ou se estiver na metade do trabalho
         local targetAnchor = ws:FindFirstChild("DeliveryTargetAnchor")
         if targetAnchor and targetAnchor.Parent == ws then
             getgenv().JobPhase = "Farming"
@@ -158,22 +202,72 @@ getgenv().DeliveryLoop = task.spawn(function()
         if getgenv().JobPhase == "Init" then
             local modeStr = getgenv().DeliveryMode
             local mode = (modeStr == "Hard" or modeStr == "HighRisk") and "HighRisk" or "Safe"
+            local pad = nil
             
-            logMsg("🚀 Iniciando trabalho diretamente via Remotes...")
-            fRem("RequestStartJobSession", "Delivery", "jobPad", mode)
-            task.wait(0.5)
-            fRem("AttemptDeliveryPickup")
-            
-            local startTime = tick()
-            while tick() - startTime < 10 do
-                if ws:FindFirstChild("DeliveryTargetAnchor") then
-                    logMsg("✅ Alvo detectado no mapa! Iniciando entrega...")
-                    break
-                end
-                task.wait(0.5)
+            for _,v in pairs(ws:GetDescendants()) do
+                if v:IsA("ProximityPrompt") and v.Name == "JobPadPrompt" then pad = v; break end
             end
             
-            getgenv().JobPhase = "Farming"
+            if pad then
+                local padPos = pad.Parent.Position
+                local c, rt, hum = getChar()
+                local dist = rt and (rt.Position * Vector3.new(1,0,1) - padPos * Vector3.new(1,0,1)).Magnitude or 999
+                local chegouNoCentro = (dist <= 4)
+                
+                if not chegouNoCentro then
+                    logMsg("🚶 Indo para o Pad para iniciar o trabalho...")
+                    TeleportAndWalk(padPos)
+                    local waitLimit = 0
+                    repeat
+                        c, rt, hum = getChar()
+                        if rt and hum then
+                            dist = (rt.Position * Vector3.new(1,0,1) - padPos * Vector3.new(1,0,1)).Magnitude
+                            if dist <= 4 then chegouNoCentro = true else hum:MoveTo(padPos) end
+                        end
+                        waitLimit = waitLimit + 1
+                        task.wait(0.5)
+                    until chegouNoCentro or waitLimit >= 30
+                end
+
+                if chegouNoCentro then
+                    logMsg("📍 No Pad! Iniciando trabalho...")
+                    if rt then rt.AssemblyLinearVelocity = Vector3.zero end
+                    if hum then hum:MoveTo(rt.Position) end
+                    
+                    if fireproximityprompt then pcall(fireproximityprompt, pad) end
+                    fRem("RequestStartJobSession", "Delivery", "jobPad", mode)
+                    
+                    local startTime = tick()
+                    local maxEspera = 25
+                    local tempoUltimoLog = 0
+                    
+                    while tick() - startTime < maxEspera do
+                        if ws:FindFirstChild("DeliveryTargetAnchor") then break end
+                        
+                        local preenchimento = lerPreenchimentoBarra()
+                        local porcentagem = math.floor(preenchimento * 100)
+                        
+                        if tick() - tempoUltimoLog >= 1.0 then
+                            logMsg("📊 Progresso real: " .. porcentagem .. "%")
+                            tempoUltimoLog = tick()
+                        end
+
+                        if preenchimento >= 0.99 then
+                            logMsg("✅ Bolsa cheia! Preparando primeira entrega...")
+                            break
+                        end
+                        task.wait(0.1)
+                    end
+                    
+                    fRem("AttemptDeliveryPickup")
+                    task.wait(1.5)
+                    getgenv().JobPhase = "Farming"
+                else
+                    task.wait(1)
+                end
+            else
+                task.wait(2)
+            end
             
         elseif getgenv().JobPhase == "Farming" then
             local t = ws:FindFirstChild("DeliveryTargetAnchor")
@@ -183,7 +277,8 @@ getgenv().DeliveryLoop = task.spawn(function()
                     local dist = rt and (rt.Position * Vector3.new(1,0,1) - t.Position * Vector3.new(1,0,1)).Magnitude or 999
                     
                     if dist > 55 then
-                        SmartTeleport(t.Position) 
+                        logMsg("🚀 Teleporte DIRETO para a casa (Anti-Limbo Ativado)")
+                        TeleportDirectSafely(t.Position)
                         task.wait(0.5)
                     end
                     
@@ -199,17 +294,17 @@ getgenv().DeliveryLoop = task.spawn(function()
                         
                         getgenv().LastAnchor = t
                         local tempoCasa = math.random(50, 70) / 10
-                        logMsg("📦 Pacote entregue! Aguardando " .. tempoCasa .. "s...")
+                        logMsg("📦 Pacote entregue! Aguardando " .. tempoCasa .. "s a proxima casa...")
                         task.wait(tempoCasa)
                         
                         task.spawn(function() task.wait(1.5); if getgenv().LastAnchor == t then getgenv().LastAnchor = nil end end)
                     else
-                        logMsg("⏳ Aguardando confirmação... Distância: " .. math.floor(dist))
                         task.wait(1)
                     end
                 end
             else
-                task.wait(0.1)
+                -- Fica aguardando a próxima casa spawnar. NÃO VOLTA PRO PAD.
+                task.wait(0.5)
             end
         end
     end
