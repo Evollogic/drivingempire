@@ -26,7 +26,7 @@ getgenv().LastAnchor = nil
 local function logMsg(msg)
     if getgenv().LogMsg then getgenv().LogMsg(msg) else print("Delivery: " .. tostring(msg)) end
 end
-logMsg("Motor Completo: Trava de chegada corrigida! O boneco VAI andar até o centro.")
+logMsg("Motor V4: Feedback 100% visível da barra e teleporte colado no pad (3-5 studs)!")
 
 -- =========================================================================
 -- ANTI-AFK & ANTI-SENTADA & NOCLIP
@@ -212,11 +212,12 @@ local function SmartTeleport(targetPos, isDelivery)
                 
                 local startPos
                 if tentativa == 1 then
-                    local charOffset = math.random(12, 18)
+                    -- REDUZIDO PARA 3 a 5 STUDS! Ele vai cair grudado no alvo agora.
+                    local charOffset = math.random(3, 5)
                     startPos = Vector3.new(targetPos.X + (dir.X * charOffset), targetPos.Y + 3.5, targetPos.Z + (dir.Z * charOffset))
                 else
                     local angulo = math.random() * math.pi * 2
-                    local dist = math.random(12, 18)
+                    local dist = math.random(3, 5)
                     startPos = Vector3.new(targetPos.X + math.cos(angulo) * dist, targetPos.Y + 3.5, targetPos.Z + math.sin(angulo) * dist)
                 end
                 
@@ -233,7 +234,6 @@ local function SmartTeleport(targetPos, isDelivery)
                 tempFloor.Position = Vector3.new(targetPos.X, targetPos.Y - 1.5, targetPos.Z)
                 tempFloor.Parent = ws
                 
-                -- O chão agora dura 10 segundos, garantindo que o boneco não caia enquanto caminha
                 game:GetService("Debris"):AddItem(tempFloor, 10)
                 
                 rt.Velocity = Vector3.zero
@@ -245,7 +245,8 @@ local function SmartTeleport(targetPos, isDelivery)
                 local timeOut = 0
                 while timeOut < 4 do
                     if rt.Position.Y - targetPos.Y < -15 then break end
-                    if (rt.Position * Vector3.new(1,0,1) - targetPos * Vector3.new(1,0,1)).Magnitude < 5 then
+                    -- Aceita que chegou se bater menos de 3 de distância
+                    if (rt.Position * Vector3.new(1,0,1) - targetPos * Vector3.new(1,0,1)).Magnitude < 3.0 then
                         chegouNoDestino = true; break
                     end
                     timeOut = timeOut + task.wait(0.1)
@@ -280,33 +281,33 @@ getgenv().DeliveryLoop = task.spawn(function()
                 local dist = rt and (rt.Position * Vector3.new(1,0,1) - padPos * Vector3.new(1,0,1)).Magnitude or 999
                 
                 local isCar = (hum and hum.SeatPart ~= nil)
-                local distMinima = isCar and 25 or 6 -- 6 studs é colar no pad, 25 é pra carro
+                -- Distância mínima hiper-rigorosa a pé (4 studs) para ter certeza que encostou
+                local distMinima = isCar and 25 or 4 
                 local chegouNoCentro = (dist <= distMinima)
                 
                 if not chegouNoCentro then
                     logMsg("Movendo para o centro da rota (" .. mode .. ")...")
                     SmartTeleport(padPos, false)
                     
-                    -- TRAVA DE CHEGADA ESTRITA: O script vai insistir até bater a distância mínima
                     local waitLimit = 0
                     repeat
                         c, rt, hum = getChar()
                         if rt and hum then
                             isCar = (hum.SeatPart ~= nil)
-                            distMinima = isCar and 25 or 6
+                            distMinima = isCar and 25 or 4
                             dist = (rt.Position * Vector3.new(1,0,1) - padPos * Vector3.new(1,0,1)).Magnitude
                             
                             if dist <= distMinima then
                                 chegouNoCentro = true
                             else
                                 if not isCar then
-                                    hum:MoveTo(padPos) -- Força a caminhada caso ele tenha parado
+                                    hum:MoveTo(padPos)
                                 end
                             end
                         end
                         waitLimit = waitLimit + 1
                         task.wait(0.25)
-                    until chegouNoCentro or waitLimit >= 30
+                    until chegouNoCentro or waitLimit >= 20
                 end
 
                 if chegouNoCentro then
@@ -314,11 +315,21 @@ getgenv().DeliveryLoop = task.spawn(function()
                     task.wait(0.5)
                     fRem("AttemptDeliveryPickup")
                     
-                    logMsg("⏳ Lendo a barra de coleta...")
+                    logMsg("⏳ Iniciando leitura da barra de coleta...")
                     local startTime = tick()
                     local maxEspera = 20
+                    local tempoUltimoLog = 0
+                    
                     while tick() - startTime < maxEspera do
                         local preenchimento = lerPreenchimentoBarra()
+                        local porcentagem = math.floor(preenchimento * 100)
+                        
+                        -- LOG EM TEMPO REAL: Mostra a porcentagem a cada segundo
+                        if tick() - tempoUltimoLog >= 1.0 then
+                            logMsg("📊 Progresso do pacote: " .. porcentagem .. "%")
+                            tempoUltimoLog = tick()
+                        end
+
                         if preenchimento >= 0.99 then
                             logMsg("✅ Barra chegou em 100%! Esperando tempo de segurança...")
                             break
@@ -332,7 +343,7 @@ getgenv().DeliveryLoop = task.spawn(function()
                     
                     getgenv().JobPhase = "Farming"
                 else
-                    logMsg("⚠️ Falha ao chegar no centro em tempo hábil. Tentando de novo...")
+                    logMsg("⚠️ Falha ao chegar no centro. Tentando de novo...")
                     task.wait(1)
                 end
             else
@@ -354,7 +365,8 @@ getgenv().DeliveryLoop = task.spawn(function()
                     c, rt = getChar()
                     dist = rt and (rt.Position * Vector3.new(1,0,1) - t.Position * Vector3.new(1,0,1)).Magnitude or 999
                     
-                    if dist < 65 then
+                    -- Aumentei a tolerância pra 85. Se você visualmente chegou, o script tem que aceitar!
+                    if dist < 85 then
                         fRem("AttemptDeliveryComplete")
                         task.wait(0.2)
                         fRem("AttemptDeliveryComplete")
@@ -371,7 +383,8 @@ getgenv().DeliveryLoop = task.spawn(function()
                             if getgenv().LastAnchor == t then getgenv().LastAnchor = nil end
                         end)
                     else
-                        logMsg("⏳ Muito longe para entregar. Ajustando no próximo ciclo...")
+                        -- Se falhar agora, ele vai cuspir a distância exata pra gente saber o quão bugado tá o mapa
+                        logMsg("⏳ Erro (falso-positivo?): O jogo diz que a distância é " .. math.floor(dist) .. " studs. Ajustando no próximo ciclo...")
                         task.wait(1)
                     end
                 end
