@@ -7,9 +7,7 @@ local remotes = rs:WaitForChild("Remotes")
 -- =========================================================================
 -- IMUNIDADE AO VOID
 -- =========================================================================
-pcall(function()
-    ws.FallenPartsDestroyHeight = -50000
-end)
+pcall(function() ws.FallenPartsDestroyHeight = -50000 end)
 
 if getgenv().DeliveryLoop then pcall(task.cancel, getgenv().DeliveryLoop) end
 if getgenv().NoclipLoop then getgenv().NoclipLoop:Disconnect() end
@@ -28,11 +26,10 @@ getgenv().LastAnchor = nil
 local function logMsg(msg)
     if getgenv().LogMsg then getgenv().LogMsg(msg) else print("Delivery: " .. tostring(msg)) end
 end
-
-logMsg("Motor Corrigido: Coleta Inteligente por Leitura de Barra (100% + Delay)!")
+logMsg("Motor Corrigido: Offset de 15 studs no teleporte a pé para forçar o gatilho do jogo!")
 
 -- =========================================================================
--- ANTI-AFK
+-- ANTI-AFK & ANTI-SENTADA & NOCLIP
 -- =========================================================================
 local vu = game:GetService("VirtualUser")
 local vim = game:GetService("VirtualInputManager")
@@ -41,7 +38,6 @@ getgenv().AntiAfkConnection = lp.Idled:Connect(function()
     if getgenv().AutoFarmDelivery then
         vu:CaptureController()
         vu:ClickButton2(Vector2.new())
-        logMsg("⚠️ Anti-AFK (Roblox): Simulando toque.")
     end
 end)
 
@@ -55,9 +51,6 @@ getgenv().AntiAfkLoop = task.spawn(function()
     end
 end)
 
--- =========================================================================
--- ANTI-SENTADA
--- =========================================================================
 local stuckTick = 0
 getgenv().AntiSeatLoop = game:GetService("RunService").Heartbeat:Connect(function()
     if not getgenv().AutoFarmDelivery then return end
@@ -87,9 +80,6 @@ getgenv().AntiSeatLoop = game:GetService("RunService").Heartbeat:Connect(functio
     end
 end)
 
--- =========================================================================
--- NOCLIP SEGURO
--- =========================================================================
 getgenv().NoclipLoop = game:GetService("RunService").Stepped:Connect(function()
     if not getgenv().AutoFarmDelivery then return end
     local c = lp.Character
@@ -152,18 +142,13 @@ local function simularBotao(nomeBotao, pressionar)
     end
 end
 
--- =========================================================================
--- LEITOR DA BARRA 3D DA CABEÇA
--- =========================================================================
 local function lerPreenchimentoBarra()
     local c = lp.Character
     if not c then return 0 end
     local head = c:FindFirstChild("Head")
     if not head then return 0 end
-    
     local bbg = head:FindFirstChild("CharacterBillboard")
     if not bbg then return 0 end
-
     local packageBar = bbg:FindFirstChild("PackageBarFrame", true)
     if packageBar and packageBar.Visible then
         for _, child in pairs(packageBar:GetChildren()) do
@@ -172,18 +157,15 @@ local function lerPreenchimentoBarra()
             end
         end
     end
-
     return 0
 end
 
 -- =========================================================================
--- FUNÇÃO DE TELEPORTE SMART COM RADAR
+-- FUNÇÃO DE TELEPORTE SMART
 -- =========================================================================
 local function SmartTeleport(targetPos, isDelivery)
-    logMsg("--- STARTING SMART TELEPORT ---")
     local c, rt, hum = getChar()
     local car = nil
-
     if hum and hum.SeatPart then
         local seatModel = hum.SeatPart:FindFirstAncestorWhichIsA("Model")
         if seatModel and seatModel ~= c then car = seatModel end
@@ -193,104 +175,84 @@ local function SmartTeleport(targetPos, isDelivery)
         local cPart = car.PrimaryPart or car:FindFirstChildWhichIsA("BasePart", true)
         local allVehicleParts = cPart:GetConnectedParts(true)
         local currentPivot = car:GetPivot()
-
+        
         local flatCurrent = Vector3.new(currentPivot.Position.X, 0, currentPivot.Position.Z)
         local flatTarget = Vector3.new(targetPos.X, 0, targetPos.Z)
         local dir = Vector3.new(1, 0, 0)
         if (flatCurrent - flatTarget).Magnitude > 1 then dir = (flatCurrent - flatTarget).Unit end
-
+        
         local carOffset = math.random(85, 100)
         local startPos = Vector3.new(targetPos.X + (dir.X * carOffset), targetPos.Y + 10, targetPos.Z + (dir.Z * carOffset))
         local destCFrame = CFrame.new(startPos, Vector3.new(targetPos.X, startPos.Y, targetPos.Z))
-
+        
         for i = 1, 15 do
             car:PivotTo(destCFrame)
-            for _, p in pairs(allVehicleParts) do p.AssemblyLinearVelocity = Vector3.zero; p.AssemblyAngularVelocity = Vector3.zero end
+            for _, p in pairs(allVehicleParts) do
+                p.AssemblyLinearVelocity = Vector3.zero; p.AssemblyAngularVelocity = Vector3.zero
+            end
             task.wait()
         end
-
+        
         simularBotao("Left", false); simularBotao("Right", false); simularBotao("Throttle", true)
         local timeOut = 0
         while timeOut < 6 do
-            if (cPart.Position * Vector3.new(1,0,1) - targetPos * Vector3.new(1,0,1)).Magnitude < 15 then break end
+            if (cPart.Position * Vector3.new(1,0,1) - targetPos * Vector3.new(1,0,1)).Magnitude < 20 then break end
             timeOut = timeOut + task.wait(0.1)
         end
         simularBotao("Throttle", false); simularBotao("Brake", true); task.wait(0.8); simularBotao("Brake", false)
-        logMsg("--- END TELEPORT (VEHICLE) ---")
     else
         if rt and hum then
-            local maxTentativas = 4
+            local maxTentativas = 3
             local chegouNoDestino = false
-
             for tentativa = 1, maxTentativas do
                 local flatCurrent = Vector3.new(rt.Position.X, 0, rt.Position.Z)
                 local flatTarget = Vector3.new(targetPos.X, 0, targetPos.Z)
                 local dir = Vector3.new(1, 0, 0)
                 if (flatCurrent - flatTarget).Magnitude > 1 then dir = (flatCurrent - flatTarget).Unit end
-
+                
                 local startPos
                 if tentativa == 1 then
-                    local charOffset = math.random(35, 45)
+                    -- DISTÂNCIA AJUSTADA: 12 a 18 studs. Próximo o suficiente para não prender em paredes, 
+                    -- mas longe o suficiente para forçar o boneco a andar e ativar o gatilho (hitbox) do pad.
+                    local charOffset = math.random(12, 18)
                     startPos = Vector3.new(targetPos.X + (dir.X * charOffset), targetPos.Y + 3.5, targetPos.Z + (dir.Z * charOffset))
                 else
                     local angulo = math.random() * math.pi * 2
-                    local dist = math.random(20, 35)
+                    local dist = math.random(12, 18)
                     startPos = Vector3.new(targetPos.X + math.cos(angulo) * dist, targetPos.Y + 3.5, targetPos.Z + math.sin(angulo) * dist)
                 end
-
+                
                 local rayParams = RaycastParams.new()
                 rayParams.FilterDescendantsInstances = {c}
                 rayParams.FilterType = Enum.RaycastFilterType.Exclude
-                
                 local rayOrigin = Vector3.new(startPos.X, startPos.Y + 50, startPos.Z)
-                local rayDir = Vector3.new(0, -150, 0)
-                local hit = ws:Raycast(rayOrigin, rayDir, rayParams)
-
-                if not hit then
-                    if tentativa < maxTentativas then
-                        logMsg("❌ Radar detectou buraco! Recalculando rota " .. tentativa)
-                        continue 
-                    else
-                        logMsg("⚠️ Bairro não carregou! Forçando teleporte cego.")
-                    end
-                end
-
+                local hit = ws:Raycast(rayOrigin, Vector3.new(0, -150, 0), rayParams)
+                if not hit and tentativa < maxTentativas then continue end
+                
                 local tempFloor = Instance.new("Part")
-                tempFloor.Name = "DeliveryGhostFloor"
-                tempFloor.Anchored = true
-                tempFloor.CanCollide = true
-                tempFloor.Transparency = 1
-                tempFloor.Size = Vector3.new(300, 2, 300)
+                tempFloor.Anchored = true; tempFloor.CanCollide = true; tempFloor.Transparency = 1
+                tempFloor.Size = Vector3.new(50, 2, 50)
                 tempFloor.Position = Vector3.new(targetPos.X, targetPos.Y - 1.5, targetPos.Z)
                 tempFloor.Parent = ws
-
+                
                 rt.Velocity = Vector3.zero
                 rt.CFrame = CFrame.new(startPos)
-                hum.PlatformStand = false
-                hum.Sit = false
-                hum:ChangeState(Enum.HumanoidStateType.Running)
-                
+                hum.PlatformStand = false; hum.Sit = false; hum:ChangeState(Enum.HumanoidStateType.Running)
                 task.wait(0.2)
                 hum:MoveTo(targetPos)
-
+                
                 local timeOut = 0
                 while timeOut < 4 do
-                    local distY = rt.Position.Y - targetPos.Y
-                    if distY < -15 then
-                        break
-                    end
+                    if rt.Position.Y - targetPos.Y < -15 then break end
+                    -- Aceitamos que ele chegou se bater menos de 4.5 de distância
                     if (rt.Position * Vector3.new(1,0,1) - targetPos * Vector3.new(1,0,1)).Magnitude < 4.5 then
-                        chegouNoDestino = true
-                        break
+                        chegouNoDestino = true; break
                     end
                     timeOut = timeOut + task.wait(0.1)
                 end
-                
                 tempFloor:Destroy()
-
                 if chegouNoDestino then break end
             end
-            logMsg("--- END TELEPORT (ON FOOT) ---")
         end
     end
 end
@@ -301,32 +263,41 @@ end
 getgenv().DeliveryLoop = task.spawn(function()
     while task.wait(0.2) do
         if not getgenv().AutoFarmDelivery then break end
-
+        
         if getgenv().JobPhase == "Init" then
             local modeStr = getgenv().DeliveryMode
             local mode = (modeStr == "Hard" or modeStr == "HighRisk") and "HighRisk" or "Safe"
-
             local pad = nil
+            
             for _,v in pairs(ws:GetDescendants()) do
                 if v:IsA("ProximityPrompt") and v.Name == "JobPadPrompt" then
                     pad = v; break
                 end
             end
+            
             if pad then
                 local padPos = pad.Parent.Position
-                logMsg("Moving to center to start route (" .. mode .. ")...")
-                SmartTeleport(padPos, false)
+                local c, rt = getChar()
+                local dist = rt and (rt.Position * Vector3.new(1,0,1) - padPos * Vector3.new(1,0,1)).Magnitude or 999
                 
-                local chegouNoCentro = false
-                local waitLimit = 0
-                while waitLimit < 40 do
-                    local c, rt, hum = getChar()
-                    if rt and (rt.Position * Vector3.new(1,0,1) - padPos * Vector3.new(1,0,1)).Magnitude < 25 then
-                        chegouNoCentro = true; break
+                local chegouNoCentro = (dist < 30)
+                
+                if not chegouNoCentro then
+                    logMsg("Movendo para o centro da rota (" .. mode .. ")...")
+                    SmartTeleport(padPos, false)
+                    
+                    local waitLimit = 0
+                    while waitLimit < 20 do
+                        c, rt = getChar()
+                        if rt and (rt.Position * Vector3.new(1,0,1) - padPos * Vector3.new(1,0,1)).Magnitude < 30 then
+                            chegouNoCentro = true
+                            break
+                        end
+                        waitLimit = waitLimit + 1
+                        task.wait(0.25)
                     end
-                    waitLimit = waitLimit + 1; task.wait(0.25)
                 end
-                
+
                 if chegouNoCentro then
                     fRem("RequestStartJobSession", "Delivery", "jobPad", mode)
                     task.wait(0.5)
@@ -335,11 +306,8 @@ getgenv().DeliveryLoop = task.spawn(function()
                     logMsg("⏳ Lendo a barra de coleta...")
                     local startTime = tick()
                     local maxEspera = 20
-                    
                     while tick() - startTime < maxEspera do
                         local preenchimento = lerPreenchimentoBarra()
-                        
-                        -- Se a barra chegou a 100% (1.00) ou muito perto
                         if preenchimento >= 0.99 then
                             logMsg("✅ Barra chegou em 100%! Esperando tempo de segurança...")
                             break
@@ -347,15 +315,14 @@ getgenv().DeliveryLoop = task.spawn(function()
                         task.wait(0.1)
                     end
                     
-                    -- Tempo de segurança solicitado (de 1 a 3 segundos)
                     local delaySeguranca = math.random(10, 30) / 10
-                    logMsg("⏱️ Aguardando " .. delaySeguranca .. "s extras para confirmar a carga...")
+                    logMsg("⏱️️ Aguardando " .. delaySeguranca .. "s extras para confirmar a carga...")
                     task.wait(delaySeguranca)
                     
                     getgenv().JobPhase = "Farming"
                 else
-                    logMsg("⚠️ Warning: Failed to reach the center pad in time. Retrying...")
-                    task.wait(2)
+                    logMsg("⚠️ Falha ao chegar no centro em tempo hábil. Tentando de novo...")
+                    task.wait(1)
                 end
             else
                 task.wait(2)
@@ -365,20 +332,35 @@ getgenv().DeliveryLoop = task.spawn(function()
             local t = ws:FindFirstChild("DeliveryTargetAnchor")
             if t and t.Parent == ws then
                 if t ~= getgenv().LastAnchor then
-                    SmartTeleport(t.Position, true)
-                    
                     local c, rt = getChar()
-                    if rt and (rt.Position * Vector3.new(1,0,1) - t.Position * Vector3.new(1,0,1)).Magnitude < 30 then
-                        fRem("AttemptDeliveryComplete"); task.wait(0.2); fRem("AttemptDeliveryComplete"); task.wait(0.3)
+                    local dist = rt and (rt.Position * Vector3.new(1,0,1) - t.Position * Vector3.new(1,0,1)).Magnitude or 999
+                    
+                    if dist > 55 then
+                        SmartTeleport(t.Position, true)
+                        task.wait(0.5)
+                    end
+                    
+                    c, rt = getChar()
+                    dist = rt and (rt.Position * Vector3.new(1,0,1) - t.Position * Vector3.new(1,0,1)).Magnitude or 999
+                    
+                    if dist < 65 then
+                        fRem("AttemptDeliveryComplete")
+                        task.wait(0.2)
+                        fRem("AttemptDeliveryComplete")
+                        task.wait(0.3)
                         fRem("AttemptDeliveryPickup")
-                        getgenv().LastAnchor = t
                         
+                        getgenv().LastAnchor = t
                         local tempoCasa = math.random(50, 70) / 10
-                        logMsg("📦 Delivered! Waiting " .. tempoCasa .. "s before moving to next house...")
+                        logMsg("📦 Pacote entregue! Aguardando " .. tempoCasa .. "s...")
                         task.wait(tempoCasa)
-                        task.spawn(function() task.wait(1.5); if getgenv().LastAnchor == t then getgenv().LastAnchor = nil end end)
+                        
+                        task.spawn(function()
+                            task.wait(1.5)
+                            if getgenv().LastAnchor == t then getgenv().LastAnchor = nil end
+                        end)
                     else
-                        logMsg("⏳ Muito longe para entregar! Mapa carregando, tentaremos de novo no próximo loop.")
+                        logMsg("⏳ Muito longe para entregar. Ajustando no próximo ciclo...")
                         task.wait(1)
                     end
                 end
