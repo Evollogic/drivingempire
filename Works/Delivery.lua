@@ -45,7 +45,7 @@ local function logMsg(msg)
     end
 end
 
-logMsg("Motor Corrigido: Colisão do chão mantida, sem paraquedas!")
+logMsg("Motor Corrigido: Spawn vetorial direcional ativado (Vindo da rua)!")
 
 -- =========================================================================
 -- SISTEMA ANTI-AFK SUPREMO
@@ -123,8 +123,6 @@ getgenv().NoclipLoop = game:GetService("RunService").Stepped:Connect(function()
     if not getgenv().AutoFarmDelivery then return end
     local c = lp.Character
     if c then
-        -- Apenas o Tronco e a Cabeça perdem colisão para não travar em cercas.
-        -- HumanoidRootPart, Pernas e Pés MANTÊM colisão para você não cair do mapa.
         for _, p in pairs(c:GetChildren()) do
             if p:IsA("BasePart") then
                 local n = p.Name
@@ -134,7 +132,6 @@ getgenv().NoclipLoop = game:GetService("RunService").Stepped:Connect(function()
             end
         end
         
-        -- Noclip do carro mantido nas partes de cima
         local hum = c:FindFirstChildOfClass("Humanoid")
         if hum and hum.SeatPart then
             local car = hum.SeatPart:FindFirstAncestorWhichIsA("Model")
@@ -254,16 +251,32 @@ local function SmartTeleport(targetPos, isDelivery)
         logMsg("--- END TELEPORT (VEHICLE) ---")
     else
         if rt and hum then
+            -- VETOR DIRECIONAL: Calcula a direção do alvo até a sua posição atual
+            local flatCurrent = Vector3.new(rt.Position.X, 0, rt.Position.Z)
+            local flatTarget = Vector3.new(targetPos.X, 0, targetPos.Z)
+            local dir = Vector3.new(1, 0, 0)
+            
+            if (flatCurrent - flatTarget).Magnitude > 1 then
+                dir = (flatCurrent - flatTarget).Unit
+            end
+
             local charOffset = math.random(35, 45)
-            -- Removemos a altura extra e colocamos exatamente na mesma altura do target
-            local startPos = Vector3.new(targetPos.X + charOffset, targetPos.Y + 1, targetPos.Z)
+            -- Multiplica a direção pelo offset. Ele vai spawnar X metros ANTES do alvo, na exata linha de aproximação
+            local startPos = Vector3.new(targetPos.X + (dir.X * charOffset), targetPos.Y + 3.5, targetPos.Z + (dir.Z * charOffset))
+
+            local tempFloor = Instance.new("Part")
+            tempFloor.Name = "DeliveryGhostFloor"
+            tempFloor.Anchored = true
+            tempFloor.CanCollide = true
+            tempFloor.Transparency = 1
+            tempFloor.Size = Vector3.new(200, 2, 200)
+            tempFloor.Position = Vector3.new(targetPos.X, targetPos.Y - 1, targetPos.Z)
+            tempFloor.Parent = ws
 
             rt.Velocity = Vector3.zero
             rt.CFrame = CFrame.new(startPos)
             hum.PlatformStand = false
             hum.Sit = false
-            
-            -- REMOVIDO o Freefall e o Jump para evitar acionar o paraquedas!
             hum:ChangeState(Enum.HumanoidStateType.Running)
             
             task.wait(0.2)
@@ -277,6 +290,7 @@ local function SmartTeleport(targetPos, isDelivery)
                 timeOut = timeOut + task.wait(0.1)
             end
             
+            tempFloor:Destroy()
             logMsg("--- END TELEPORT (ON FOOT) ---")
         end
     end
