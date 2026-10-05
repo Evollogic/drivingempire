@@ -2,6 +2,13 @@ local ws = game:GetService("Workspace")
 local rs = game:GetService("ReplicatedStorage")
 local players = game:GetService("Players")
 local lp = players.LocalPlayer
+
+-- TRAVA DE CARREGAMENTO: Espera o jogo carregar e aguarda 6 segundos de segurança
+if not game:IsLoaded() then
+    game.Loaded:Wait()
+end
+task.wait(6)
+
 local remotes = rs:WaitForChild("Remotes")
 
 -- =========================================================================
@@ -25,7 +32,7 @@ getgenv().LastAnchor = nil
 local function logMsg(msg)
     if getgenv().LogMsg then getgenv().LogMsg(msg) else print("Delivery: " .. tostring(msg)) end
 end
-logMsg("Motor V8: Deteccao Instantanea de Mapa! Se a casa spawnar, ele arranca na hora.")
+logMsg("Motor V9: Delay inicial de 6s ativado! Aguardando o mapa carregar completamente.")
 
 -- =========================================================================
 -- ANTI-AFK & ANTI-SENTADA & NOCLIP
@@ -256,7 +263,6 @@ getgenv().DeliveryLoop = task.spawn(function()
     while task.wait(0.2) do
         if not getgenv().AutoFarmDelivery then break end
         
-        -- RADAR SUPREMO: Se o alvo já existe no mapa, o trabalho já começou. Pula o Init direto pro Farming!
         local targetAnchor = ws:FindFirstChild("DeliveryTargetAnchor")
         if targetAnchor and targetAnchor.Parent == ws then
             getgenv().JobPhase = "Farming"
@@ -278,7 +284,6 @@ getgenv().DeliveryLoop = task.spawn(function()
             local maxEspera = 15
             
             while tick() - startTime < maxEspera do
-                -- Quebra o loop IMEDIATAMENTE se o mapa atualizar, ignorando a barra visual
                 if ws:FindFirstChild("DeliveryTargetAnchor") then
                     logMsg("✅ Alvo detectado no mapa! Indo para a entrega...")
                     break
@@ -292,7 +297,6 @@ getgenv().DeliveryLoop = task.spawn(function()
                 task.wait(0.2)
             end
             
-            -- Pequeno delay pra dar tempo do servidor processar que o pacote ta com vc
             task.wait(1.5)
             
         elseif getgenv().JobPhase == "Farming" then
