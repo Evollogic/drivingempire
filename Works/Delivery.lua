@@ -17,7 +17,6 @@ if getgenv().AntiAfkLoop then pcall(task.cancel, getgenv().AntiAfkLoop) end
 if getgenv().AntiVoidLoop then getgenv().AntiVoidLoop:Disconnect() end
 
 getgenv().AutoFarmDelivery = true
-getgenv().JobPhase = "Init"
 getgenv().LastAnchor = nil
 
 -- =========================================================================
@@ -26,7 +25,7 @@ getgenv().LastAnchor = nil
 local function logMsg(msg)
     if getgenv().LogMsg then getgenv().LogMsg(msg) else print("Delivery: " .. tostring(msg)) end
 end
-logMsg("Motor V7: Bypass de Movimento! Disparando remotes de inicio direto.")
+logMsg("Motor V8: Deteccao Instantanea de Mapa! Se a casa spawnar, ele arranca na hora.")
 
 -- =========================================================================
 -- ANTI-AFK & ANTI-SENTADA & NOCLIP
@@ -161,7 +160,7 @@ local function lerPreenchimentoBarra()
 end
 
 -- =========================================================================
--- FUNÇÃO DE TELEPORTE SMART (MANTIDA PARA ENTREGAS NAS CASAS)
+-- FUNÇÃO DE TELEPORTE SMART
 -- =========================================================================
 local function SmartTeleport(targetPos, isDelivery)
     local c, rt, hum = getChar()
@@ -257,44 +256,44 @@ getgenv().DeliveryLoop = task.spawn(function()
     while task.wait(0.2) do
         if not getgenv().AutoFarmDelivery then break end
         
+        -- RADAR SUPREMO: Se o alvo já existe no mapa, o trabalho já começou. Pula o Init direto pro Farming!
+        local targetAnchor = ws:FindFirstChild("DeliveryTargetAnchor")
+        if targetAnchor and targetAnchor.Parent == ws then
+            getgenv().JobPhase = "Farming"
+        else
+            getgenv().JobPhase = "Init"
+        end
+        
         if getgenv().JobPhase == "Init" then
             local modeStr = getgenv().DeliveryMode
             local mode = (modeStr == "Hard" or modeStr == "HighRisk") and "HighRisk" or "Safe"
             
             logMsg("🚀 Disparando remotes de inicialização do trabalho (" .. mode .. ")...")
-            
-            -- REMOVIDO TODO O CÓDIGO DE IR ATÉ O CENTRO
-            -- Dispara o remote direto de onde você estiver
             fRem("RequestStartJobSession", "Delivery", "jobPad", mode)
             task.wait(0.5)
             fRem("AttemptDeliveryPickup")
             
-            logMsg("⏳ Iniciando leitura da barra de coleta...")
+            logMsg("⏳ Aguardando confirmacao (Barra OU Mapa)...")
             local startTime = tick()
-            local maxEspera = 20
-            local tempoUltimoLog = 0
+            local maxEspera = 15
             
             while tick() - startTime < maxEspera do
-                local preenchimento = lerPreenchimentoBarra()
-                local porcentagem = math.floor(preenchimento * 100)
-                
-                if tick() - tempoUltimoLog >= 1.0 then
-                    logMsg("📊 Progresso do pacote: " .. porcentagem .. "%")
-                    tempoUltimoLog = tick()
-                end
-
-                if preenchimento >= 0.99 then
-                    logMsg("✅ Barra chegou em 100%! Esperando tempo de segurança...")
+                -- Quebra o loop IMEDIATAMENTE se o mapa atualizar, ignorando a barra visual
+                if ws:FindFirstChild("DeliveryTargetAnchor") then
+                    logMsg("✅ Alvo detectado no mapa! Indo para a entrega...")
                     break
                 end
-                task.wait(0.1)
+                
+                local preenchimento = lerPreenchimentoBarra()
+                if preenchimento >= 0.99 then
+                    logMsg("✅ Barra em 100%! Indo para a entrega...")
+                    break
+                end
+                task.wait(0.2)
             end
             
-            local delaySeguranca = math.random(10, 30) / 10
-            logMsg("⏱️ Aguardando " .. delaySeguranca .. "s extras para confirmar a carga...")
-            task.wait(delaySeguranca)
-            
-            getgenv().JobPhase = "Farming"
+            -- Pequeno delay pra dar tempo do servidor processar que o pacote ta com vc
+            task.wait(1.5)
             
         elseif getgenv().JobPhase == "Farming" then
             local t = ws:FindFirstChild("DeliveryTargetAnchor")
@@ -328,7 +327,7 @@ getgenv().DeliveryLoop = task.spawn(function()
                             if getgenv().LastAnchor == t then getgenv().LastAnchor = nil end
                         end)
                     else
-                        logMsg("⏳ Erro: O jogo diz que a distância é " .. math.floor(dist) .. " studs. Ajustando...")
+                        logMsg("⏳ Erro: O jogo diz que a distancia e " .. math.floor(dist) .. " studs. Ajustando...")
                         task.wait(1)
                     end
                 end
