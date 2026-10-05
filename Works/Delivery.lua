@@ -204,10 +204,7 @@ local function SmartTeleport(targetPos, isDelivery)
         local lookAt = Vector3.new(targetPos.X, startPos.Y, targetPos.Z)
         local destCFrame = CFrame.new(startPos, lookAt)
 
-        local estadosColisao = {}
-
         for _, p in pairs(allVehicleParts) do
-            estadosColisao[p] = p.CanCollide
             local n = p.Name:lower()
             if not (n:match("wheel") or n:match("tire") or n:match("rim") or n:match("suspension") or n:match("whl")) then
                 p.CanCollide = false
@@ -248,14 +245,12 @@ local function SmartTeleport(targetPos, isDelivery)
         task.wait(0.8)
         simularBotao("Brake", false)
 
-        for _, p in pairs(allVehicleParts) do
-            if estadosColisao[p] ~= nil then
-                p.CanCollide = estadosColisao[p]
-            end
-        end
+        -- A RESTAURAÇÃO DE COLISÃO FOI REMOVIDA DAQUI! O carro não vai travar mais.
+
         logMsg("--- END TELEPORT (VEHICLE) ---")
     else
         if rt and hum then
+            -- BONECO VOLTA A CAMINHAR EXATAMENTE COMO ESTAVA ANTES!
             local charOffset = math.random(35, 45)
             local startPos = Vector3.new(targetPos.X + charOffset, targetPos.Y + 3.5, targetPos.Z)
 
@@ -316,7 +311,6 @@ getgenv().DeliveryLoop = task.spawn(function()
                 logMsg("Moving to center to start route (" .. mode .. ")...")
                 SmartTeleport(padPos, false)
                 
-                -- CHECAGEM DE DISTÂNCIA
                 local chegouNoCentro = false
                 local waitLimit = 0
                 
