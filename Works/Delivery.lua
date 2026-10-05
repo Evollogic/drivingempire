@@ -26,7 +26,7 @@ getgenv().LastAnchor = nil
 local function logMsg(msg)
     if getgenv().LogMsg then getgenv().LogMsg(msg) else print("Delivery: " .. tostring(msg)) end
 end
-logMsg("Motor V6: Teleporte longo (40 studs) e caminhada real até o centro ativados!")
+logMsg("Motor V7: Bypass de Movimento! Disparando remotes de inicio direto.")
 
 -- =========================================================================
 -- ANTI-AFK & ANTI-SENTADA & NOCLIP
@@ -161,7 +161,7 @@ local function lerPreenchimentoBarra()
 end
 
 -- =========================================================================
--- FUNÇÃO DE TELEPORTE SMART
+-- FUNÇÃO DE TELEPORTE SMART (MANTIDA PARA ENTREGAS NAS CASAS)
 -- =========================================================================
 local function SmartTeleport(targetPos, isDelivery)
     local c, rt, hum = getChar()
@@ -212,7 +212,6 @@ local function SmartTeleport(targetPos, isDelivery)
                 
                 local startPos
                 if tentativa == 1 then
-                    -- TELEPORTE LONGE: 35 a 45 studs de distância.
                     local charOffset = math.random(35, 45)
                     startPos = Vector3.new(targetPos.X + (dir.X * charOffset), targetPos.Y + 3.5, targetPos.Z + (dir.Z * charOffset))
                 else
@@ -223,7 +222,6 @@ local function SmartTeleport(targetPos, isDelivery)
                 
                 local tempFloor = Instance.new("Part")
                 tempFloor.Anchored = true; tempFloor.CanCollide = true; tempFloor.Transparency = 1
-                -- CHÃO GIGANTE: 150x150 para ele conseguir andar tudo isso sem cair no limbo
                 tempFloor.Size = Vector3.new(150, 2, 150)
                 tempFloor.Position = Vector3.new(targetPos.X, targetPos.Y - 1.5, targetPos.Z)
                 tempFloor.Parent = ws
@@ -235,11 +233,9 @@ local function SmartTeleport(targetPos, isDelivery)
                 hum.PlatformStand = false; hum.Sit = false; hum:ChangeState(Enum.HumanoidStateType.Running)
                 task.wait(0.2)
                 
-                -- COMANDO DE CAMINHADA: O boneco vai andar toda a distância.
                 hum:MoveTo(targetPos)
                 
                 local timeOut = 0
-                -- TIMEOUT LONGO: Dá até 10 segundos para ele cruzar a distância inteira andando.
                 while timeOut < 100 do 
                     if rt.Position.Y - targetPos.Y < -15 then break end
                     if (rt.Position * Vector3.new(1,0,1) - targetPos * Vector3.new(1,0,1)).Magnitude < 4.0 then
@@ -264,92 +260,41 @@ getgenv().DeliveryLoop = task.spawn(function()
         if getgenv().JobPhase == "Init" then
             local modeStr = getgenv().DeliveryMode
             local mode = (modeStr == "Hard" or modeStr == "HighRisk") and "HighRisk" or "Safe"
-            local pad = nil
             
-            for _,v in pairs(ws:GetDescendants()) do
-                if v:IsA("ProximityPrompt") and v.Name == "JobPadPrompt" then
-                    pad = v; break
-                end
-            end
+            logMsg("🚀 Disparando remotes de inicialização do trabalho (" .. mode .. ")...")
             
-            if pad then
-                local padPos = pad.Parent.Position
-                local c, rt, hum = getChar()
-                local dist = rt and (rt.Position * Vector3.new(1,0,1) - padPos * Vector3.new(1,0,1)).Magnitude or 999
+            -- REMOVIDO TODO O CÓDIGO DE IR ATÉ O CENTRO
+            -- Dispara o remote direto de onde você estiver
+            fRem("RequestStartJobSession", "Delivery", "jobPad", mode)
+            task.wait(0.5)
+            fRem("AttemptDeliveryPickup")
+            
+            logMsg("⏳ Iniciando leitura da barra de coleta...")
+            local startTime = tick()
+            local maxEspera = 20
+            local tempoUltimoLog = 0
+            
+            while tick() - startTime < maxEspera do
+                local preenchimento = lerPreenchimentoBarra()
+                local porcentagem = math.floor(preenchimento * 100)
                 
-                local isCar = (hum and hum.SeatPart ~= nil)
-                local distMinima = isCar and 25 or 4 
-                local chegouNoCentro = (dist <= distMinima)
-                
-                if not chegouNoCentro then
-                    logMsg("Movendo para o centro da rota (" .. mode .. ")...")
-                    SmartTeleport(padPos, false)
-                    
-                    local waitLimit = 0
-                    repeat
-                        c, rt, hum = getChar()
-                        if rt and hum then
-                            isCar = (hum.SeatPart ~= nil)
-                            distMinima = isCar and 25 or 4
-                            dist = (rt.Position * Vector3.new(1,0,1) - padPos * Vector3.new(1,0,1)).Magnitude
-                            
-                            if dist <= distMinima then
-                                chegouNoCentro = true
-                            else
-                                if not isCar then
-                                    hum:MoveTo(padPos)
-                                end
-                            end
-                        end
-                        waitLimit = waitLimit + 1
-                        task.wait(0.5) -- Atualizado pra verificar com menos spam
-                    until chegouNoCentro or waitLimit >= 30
+                if tick() - tempoUltimoLog >= 1.0 then
+                    logMsg("📊 Progresso do pacote: " .. porcentagem .. "%")
+                    tempoUltimoLog = tick()
                 end
 
-                if chegouNoCentro then
-                    fRem("RequestStartJobSession", "Delivery", "jobPad", mode)
-                    task.wait(0.5)
-                    fRem("AttemptDeliveryPickup")
-                    
-                    logMsg("⏳ Iniciando leitura da barra de coleta...")
-                    local startTime = tick()
-                    local maxEspera = 20
-                    local tempoUltimoLog = 0
-                    
-                    while tick() - startTime < maxEspera do
-                        local preenchimento = lerPreenchimentoBarra()
-                        local porcentagem = math.floor(preenchimento * 100)
-                        
-                        if tick() - tempoUltimoLog >= 1.0 then
-                            logMsg("📊 Progresso do pacote: " .. porcentagem .. "%")
-                            tempoUltimoLog = tick()
-                            
-                            if porcentagem == 0 and not isCar and hum and rt then
-                                local offset = Vector3.new(math.random(-2, 2), 0, math.random(-2, 2))
-                                hum:MoveTo(padPos + offset)
-                            end
-                        end
-
-                        if preenchimento >= 0.99 then
-                            if hum then hum:MoveTo(rt.Position) end
-                            logMsg("✅ Barra chegou em 100%! Esperando tempo de segurança...")
-                            break
-                        end
-                        task.wait(0.1)
-                    end
-                    
-                    local delaySeguranca = math.random(10, 30) / 10
-                    logMsg("⏱️ Aguardando " .. delaySeguranca .. "s extras para confirmar a carga...")
-                    task.wait(delaySeguranca)
-                    
-                    getgenv().JobPhase = "Farming"
-                else
-                    logMsg("⚠️ Falha ao chegar no centro. Tentando de novo...")
-                    task.wait(1)
+                if preenchimento >= 0.99 then
+                    logMsg("✅ Barra chegou em 100%! Esperando tempo de segurança...")
+                    break
                 end
-            else
-                task.wait(2)
+                task.wait(0.1)
             end
+            
+            local delaySeguranca = math.random(10, 30) / 10
+            logMsg("⏱️ Aguardando " .. delaySeguranca .. "s extras para confirmar a carga...")
+            task.wait(delaySeguranca)
+            
+            getgenv().JobPhase = "Farming"
             
         elseif getgenv().JobPhase == "Farming" then
             local t = ws:FindFirstChild("DeliveryTargetAnchor")
