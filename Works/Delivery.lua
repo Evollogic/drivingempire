@@ -12,7 +12,7 @@ local function logMsg(msg)
     if getgenv().LogMsg then getgenv().LogMsg(msg) else print("Delivery: " .. tostring(msg)) end
 end
 
-logMsg("Motor V21: Barra lida SOMENTE nas entregas/coletas. Pad livre de barra!")
+logMsg("Motor V22: Fim do loop de teleporte infinito! Caminhada real garantida.")
 task.wait(6)
 
 pcall(function() ws.FallenPartsDestroyHeight = -50000 end)
@@ -105,7 +105,7 @@ local function getChar()
 end
 
 -- =========================================================================
--- LEITURA DO FILL
+-- LEITURA DO FILL (BARRA DE PROGRESSO)
 -- =========================================================================
 local function lerPreenchimentoBarra()
     local c = lp.Character
@@ -127,14 +127,13 @@ local function lerPreenchimentoBarra()
 end
 
 -- =========================================================================
--- FUNÇÃO UNIVERSAL DE ESPERAR COLETA (SOMENTE PARA A ROTA)
+-- ESPERA A BARRA ENCHER
 -- =========================================================================
 local function AguardarColeta()
     local isVis = false
     local pct = 0
     local checkTimer = tick()
     
-    -- Dá 3 segundos pro jogo renderizar a barra de coleta/entrega
     while tick() - checkTimer < 3 do
         isVis, pct = lerPreenchimentoBarra()
         if isVis then break end
@@ -142,7 +141,7 @@ local function AguardarColeta()
     end
     
     if isVis then
-        logMsg("⏳ Barra detectada! Realizando ação...")
+        logMsg("⏳ Barra de processo detectada! Aguardando conclusão...")
         local startTime = tick()
         local tempoUltimoLog = 0
         
@@ -162,14 +161,14 @@ local function AguardarColeta()
             task.wait(0.1)
         end
     else
-        logMsg("⚠️ Nenhuma barra apareceu neste local, prosseguindo...")
+        logMsg("⚠️ Nenhuma barra visível, prosseguindo...")
     end
 end
 
 -- =========================================================================
--- CAMINHADA OBRIGATÓRIA (FIM DO TELEPORTE DIRETO)
+-- FUNÇÃO BLINDADA DE TELEPORTE + CAMINHADA (ÚNICA)
 -- =========================================================================
-local function SmartTeleport(targetPos)
+local function CaminharAteAlvo(targetPos)
     local c, rt, hum = getChar()
     if not (rt and hum) then return end
     
@@ -178,6 +177,7 @@ local function SmartTeleport(targetPos)
     local dir = Vector3.new(1, 0, 0)
     if (flatCurrent - flatTarget).Magnitude > 1 then dir = (flatCurrent - flatTarget).Unit end
     
+    -- Cai a 40 studs
     local charOffset = math.random(35, 45)
     local startPos = Vector3.new(targetPos.X + (dir.X * charOffset), targetPos.Y + 3.5, targetPos.Z + (dir.Z * charOffset))
     
@@ -194,10 +194,19 @@ local function SmartTeleport(targetPos)
     task.wait(0.2)
     
     hum:MoveTo(targetPos)
+    
+    -- Espera o boneco chegar de verdade perto do alvo (menos de 6 studs) antes de liberar o script
     local timeOut = 0
-    while timeOut < 100 do 
+    while timeOut < 120 do 
+        c, rt, hum = getChar()
+        if not (rt and hum) then break end
         if rt.Position.Y - targetPos.Y < -15 then break end
-        if (rt.Position * Vector3.new(1,0,1) - targetPos * Vector3.new(1,0,1)).Magnitude < 4.0 then break end
+        
+        local distAtual = (rt.Position * Vector3.new(1,0,1) - targetPos * Vector3.new(1,0,1)).Magnitude
+        if distAtual < 6.0 then 
+            break 
+        end
+        
         timeOut = timeOut + 1
         task.wait(0.1)
     end
@@ -223,34 +232,18 @@ getgenv().DeliveryLoop = task.spawn(function()
                 local padPos = pad.Parent.Position
                 local c, rt, hum = getChar()
                 local dist = rt and (rt.Position * Vector3.new(1,0,1) - padPos * Vector3.new(1,0,1)).Magnitude or 999
-                local chegouNoCentro = (dist <= 4)
                 
-                if not chegouNoCentro then
-                    logMsg("🚶 Caminhando de longe para o centro do pad...")
-                    SmartTeleport(padPos) 
-                    local waitLimit = 0
-                    repeat
-                        c, rt, hum = getChar()
-                        if rt and hum then
-                            dist = (rt.Position * Vector3.new(1,0,1) - padPos * Vector3.new(1,0,1)).Magnitude
-                            if dist <= 4 then chegouNoCentro = true else hum:MoveTo(padPos) end
-                        end
-                        waitLimit = waitLimit + 1
-                        task.wait(0.5)
-                    until chegouNoCentro or waitLimit >= 30
-                end
-
-                if chegouNoCentro then
-                    logMsg("📍 Chegou no Pad! Acionando painel de trabalho...")
+                if dist > 6 then
+                    logMsg("🚶 Caminhando para o centro do pad...")
+                    CaminharAteAlvo(padPos)
+                else
+                    logMsg("📍 No Pad! Acionando painel de trabalho...")
                     if hum then hum:MoveTo(rt.Position) end
                     
-                    -- Apenas dispara os eventos do Pad e vaza! Zero barra aqui.
                     fRem("RequestStartJobSession", "Delivery", "jobPad", mode)
                     task.wait(1.5)
                     
                     getgenv().JobPhase = "Farming"
-                else
-                    task.wait(1)
                 end
             else
                 task.wait(2)
@@ -263,36 +256,27 @@ getgenv().DeliveryLoop = task.spawn(function()
                     local c, rt, hum = getChar()
                     local dist = rt and (rt.Position * Vector3.new(1,0,1) - t.Position * Vector3.new(1,0,1)).Magnitude or 999
                     
-                    if dist > 55 then
-                        logMsg("🚶 Caminhando até o destino de coleta/entrega...")
-                        SmartTeleport(t.Position) 
-                        task.wait(0.5)
-                    end
-                    
-                    c, rt, hum = getChar()
-                    dist = rt and (rt.Position * Vector3.new(1,0,1) - t.Position * Vector3.new(1,0,1)).Magnitude or 999
-                    
-                    if dist < 85 then
-                        -- Pisa exatamente na marcação
-                        if hum then hum:MoveTo(t.Position) end
+                    -- Se estiver longe, faz a caminhada UMA ÚNICA VEZ e espera chegar
+                    if dist > 8 then
+                        logMsg("🚶 Caminhando até o destino (Distância: " .. math.floor(dist) .. ")...")
+                        CaminharAteAlvo(t.Position)
+                    else
+                        -- Chegou colado na marcação! Fica estátua e lê a barra.
+                        logMsg("🎯 Chegou no destino! Processando...")
+                        if hum then hum:MoveTo(rt.Position) end
                         
-                        -- LÊ A BARRA DE PROCESSO AQUI!
                         AguardarColeta()
                         
-                        -- Confirma pros remotes do jogo que terminamos a ação
                         fRem("AttemptDeliveryComplete")
                         task.wait(0.2)
                         fRem("AttemptDeliveryPickup")
                         
                         getgenv().LastAnchor = t
                         local tempoCasa = math.random(30, 50) / 10
-                        logMsg("📦 Partindo para a próxima em " .. tempoCasa .. "s...")
+                        logMsg("📦 Concluído! Próxima rota em " .. tempoCasa .. "s...")
                         task.wait(tempoCasa)
                         
                         task.spawn(function() task.wait(1.5); if getgenv().LastAnchor == t then getgenv().LastAnchor = nil end end)
-                    else
-                        logMsg("⏳ Ajustando posição no destino... Distância: " .. math.floor(dist))
-                        task.wait(1)
                     end
                 end
             else
