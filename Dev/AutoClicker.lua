@@ -1,6 +1,7 @@
 local coreGui = game:GetService("CoreGui")
 local plyrs = game:GetService("Players")
 local lp = plyrs.LocalPlayer
+local rs = game:GetService("RunService")
 
 for _, v in pairs(coreGui:GetChildren()) do
     if v.Name == "DevClickerUI" then v:Destroy() end
@@ -24,20 +25,20 @@ Instance.new("UIStroke", mainFrame).Color = Color3.fromRGB(0, 255, 255)
 local title = Instance.new("TextLabel", mainFrame)
 title.Size = UDim2.new(1, 0, 0, 30)
 title.BackgroundTransparency = 1
-title.Text = "3D HUD Inspector"
+title.Text = "3D Telemetry Monitor"
 title.TextColor3 = Color3.fromRGB(255, 255, 255)
 title.Font = Enum.Font.GothamBold
 title.TextSize = 14
 
-local scanBtn = Instance.new("TextButton", mainFrame)
-scanBtn.Size = UDim2.new(0.8, 0, 0, 40)
-scanBtn.Position = UDim2.new(0.1, 0, 0, 35)
-scanBtn.BackgroundColor3 = Color3.fromRGB(50, 50, 200)
-scanBtn.Text = "SCAN 3D BAR"
-scanBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-scanBtn.Font = Enum.Font.GothamBold
-scanBtn.TextSize = 12
-Instance.new("UICorner", scanBtn).CornerRadius = UDim.new(0, 6)
+local monitorBtn = Instance.new("TextButton", mainFrame)
+monitorBtn.Size = UDim2.new(0.8, 0, 0, 40)
+monitorBtn.Position = UDim2.new(0.1, 0, 0, 35)
+monitorBtn.BackgroundColor3 = Color3.fromRGB(50, 50, 200)
+monitorBtn.Text = "START MONITOR"
+monitorBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+monitorBtn.Font = Enum.Font.GothamBold
+monitorBtn.TextSize = 12
+Instance.new("UICorner", monitorBtn).CornerRadius = UDim.new(0, 6)
 
 local logToggleBtn = Instance.new("TextButton", mainFrame)
 logToggleBtn.Size = UDim2.new(0.8, 0, 0, 40)
@@ -69,7 +70,7 @@ local termTitle = Instance.new("TextLabel", termTop)
 termTitle.Size = UDim2.new(0.5, 0, 1, 0)
 termTitle.Position = UDim2.new(0, 10, 0, 0)
 termTitle.BackgroundTransparency = 1
-termTitle.Text = "📟 Inspector Logs"
+termTitle.Text = "📟 Live Telemetry Logs"
 termTitle.TextColor3 = Color3.fromRGB(100, 255, 100)
 termTitle.Font = Enum.Font.GothamBold
 termTitle.TextSize = 14
@@ -121,7 +122,7 @@ local function logMsg(msg)
     termScroll.CanvasPosition = Vector2.new(0, termScroll.AbsoluteWindowSize.Y + 9999)
 end
 
-logMsg("Scanner 3D Carregado. Clique em 'SCAN 3D BAR'!")
+logMsg("Monitor de Alta Frequência Carregado.")
 
 termCopyBtn.MouseButton1Click:Connect(function()
     if setclipboard then
@@ -151,57 +152,116 @@ termCloseBtn.MouseButton1Click:Connect(function()
     logToggleBtn.Text = "SHOW LOGS"
 end)
 
-local function scanBillboard(bbg)
-    local foundText = false
-    logMsg("🔎 Encontrado: " .. bbg.Name)
-    logMsg("📁 Caminho: " .. bbg:GetFullName())
-    
-    for _, child in pairs(bbg:GetDescendants()) do
-        if child:IsA("TextLabel") or child:IsA("TextBox") then
-            foundText = true
-            logMsg("   📝 [Texto] " .. child.Name .. " -> Valor: '" .. tostring(child.Text) .. "'")
-            logMsg("   🔗 Path: " .. child:GetFullName())
-        elseif child:IsA("Frame") or child:IsA("ImageLabel") then
-            logMsg("   🖼️ [" .. child.ClassName .. "] " .. child.Name)
-        end
-    end
-    
-    if not foundText then
-        logMsg("   ⚠️ Nenhum texto nesta UI.")
-    end
-    logMsg("--------------------------------------------------")
-end
+-- =========================================================================
+-- SISTEMA DE MONITORAMENTO EM TEMPO REAL
+-- =========================================================================
+local isMonitoring = false
+local monitorLoop = nil
 
-scanBtn.MouseButton1Click:Connect(function()
+local lastState = {
+    barVisible = nil,
+    barFill = nil,
+    money = nil,
+    job = nil,
+    bbgFound = nil
+}
+
+local function scanHead()
     local char = lp.Character
-    if not char then
-        logMsg("❌ Erro: Personagem não encontrado.")
+    if not char then return end
+    local head = char:FindFirstChild("Head")
+    if not head then return end
+    
+    local bbg = head:FindFirstChild("CharacterBillboard")
+    
+    if not bbg then
+        if lastState.bbgFound ~= false then
+            logMsg("⚠️ Billboard não encontrado na cabeça.")
+            lastState.bbgFound = false
+        end
         return
     end
 
-    logMsg("=== INICIANDO VARREDURA 3D (CABEÇA/BONECO) ===")
-    local achouAlgumaCoisa = false
-
-    -- 1. Procura se a barra está dentro do modelo do personagem
-    for _, v in pairs(char:GetDescendants()) do
-        if v:IsA("BillboardGui") or v:IsA("SurfaceGui") then
-            achouAlgumaCoisa = true
-            scanBillboard(v)
-        end
+    if lastState.bbgFound ~= true then
+        logMsg("✅ Billboard rastreado com sucesso! Iniciando leitura.")
+        lastState.bbgFound = true
     end
 
-    -- 2. Procura se a barra está no PlayerGui, mas grudada (Adornee) no personagem
-    for _, v in pairs(lp.PlayerGui:GetDescendants()) do
-        if (v:IsA("BillboardGui") or v:IsA("SurfaceGui")) and v.Adornee then
-            if v.Adornee == char or v.Adornee:IsDescendantOf(char) then
-                achouAlgumaCoisa = true
-                scanBillboard(v)
+    local currentState = {
+        barVisible = false,
+        barFill = "N/A",
+        money = "",
+        job = ""
+    }
+
+    -- Procura o container da barra
+    local packageBar = bbg:FindFirstChild("PackageBarFrame", true)
+    if packageBar then
+        currentState.barVisible = packageBar.Visible
+        
+        -- Se estiver visível, tenta achar a barrinha que preenche dentro dele
+        if currentState.barVisible then
+            for _, child in pairs(packageBar:GetChildren()) do
+                if child:IsA("Frame") or child:IsA("ImageLabel") then
+                    -- Grava o tamanho X (ex: 0.50 significa 50% cheio)
+                    currentState.barFill = string.format("%.2f", child.Size.X.Scale)
+                end
             end
         end
     end
 
-    if not achouAlgumaCoisa then
-        logMsg("❌ Nenhuma barra flutuante 3D foi encontrada no seu boneco.")
+    -- Procura os textos
+    for _, child in pairs(bbg:GetChildren()) do
+        if child.Name == "CriminalCharacterTextLabel" and child:IsA("TextLabel") then
+            if child.Text:match("%$") then
+                currentState.money = child.Text
+            end
+        elseif child.Name == "JobTextLabel" and child:IsA("TextLabel") then
+            currentState.job = child.Text:gsub("<[^>]+>", "")
+        end
     end
-    logMsg("=== FIM DA VARREDURA ===")
+
+    -- Compara com o último estado para logar só o que mudou
+    if currentState.barVisible ~= lastState.barVisible then
+        logMsg("📊 PackageBarFrame Visível: " .. tostring(currentState.barVisible))
+        lastState.barVisible = currentState.barVisible
+    end
+
+    -- Se a barra mudou mais de 0.05 (5%) de preenchimento, avisa no log
+    if currentState.barFill ~= "N/A" and currentState.barFill ~= lastState.barFill then
+        logMsg("📈 Barra Preenchimento: " .. currentState.barFill)
+        lastState.barFill = currentState.barFill
+    end
+
+    if currentState.money ~= lastState.money then
+        logMsg("💰 Dinheiro: " .. currentState.money)
+        lastState.money = currentState.money
+    end
+
+    if currentState.job ~= lastState.job then
+        logMsg("💼 Profissão/Nível: " .. currentState.job)
+        lastState.job = currentState.job
+    end
+end
+
+monitorBtn.MouseButton1Click:Connect(function()
+    isMonitoring = not isMonitoring
+
+    if isMonitoring then
+        monitorBtn.Text = "STOP MONITOR"
+        monitorBtn.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
+        logMsg("🟢 Monitoramento Iniciado! Lendo cabeça 10x por segundo...")
+        
+        monitorLoop = task.spawn(function()
+            while isMonitoring do
+                scanHead()
+                task.wait(0.1) -- Alta frequência
+            end
+        end)
+    else
+        monitorBtn.Text = "START MONITOR"
+        monitorBtn.BackgroundColor3 = Color3.fromRGB(50, 50, 200)
+        logMsg("🔴 Monitoramento Parado.")
+        if monitorLoop then task.cancel(monitorLoop) end
+    end
 end)
