@@ -1,6 +1,5 @@
 local coreGui = game:GetService("CoreGui")
 local plyrs = game:GetService("Players")
-local uis = game:GetService("UserInputService")
 local lp = plyrs.LocalPlayer
 
 for _, v in pairs(coreGui:GetChildren()) do
@@ -25,20 +24,20 @@ Instance.new("UIStroke", mainFrame).Color = Color3.fromRGB(0, 255, 255)
 local title = Instance.new("TextLabel", mainFrame)
 title.Size = UDim2.new(1, 0, 0, 30)
 title.BackgroundTransparency = 1
-title.Text = "GUI Inspector (Spy)"
+title.Text = "3D HUD Inspector"
 title.TextColor3 = Color3.fromRGB(255, 255, 255)
 title.Font = Enum.Font.GothamBold
 title.TextSize = 14
 
-local toggleBtn = Instance.new("TextButton", mainFrame)
-toggleBtn.Size = UDim2.new(0.8, 0, 0, 40)
-toggleBtn.Position = UDim2.new(0.1, 0, 0, 35)
-toggleBtn.BackgroundColor3 = Color3.fromRGB(50, 200, 50)
-toggleBtn.Text = "SPY MODE: OFF"
-toggleBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-toggleBtn.Font = Enum.Font.GothamBold
-toggleBtn.TextSize = 12
-Instance.new("UICorner", toggleBtn).CornerRadius = UDim.new(0, 6)
+local scanBtn = Instance.new("TextButton", mainFrame)
+scanBtn.Size = UDim2.new(0.8, 0, 0, 40)
+scanBtn.Position = UDim2.new(0.1, 0, 0, 35)
+scanBtn.BackgroundColor3 = Color3.fromRGB(50, 50, 200)
+scanBtn.Text = "SCAN 3D BAR"
+scanBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+scanBtn.Font = Enum.Font.GothamBold
+scanBtn.TextSize = 12
+Instance.new("UICorner", scanBtn).CornerRadius = UDim.new(0, 6)
 
 local logToggleBtn = Instance.new("TextButton", mainFrame)
 logToggleBtn.Size = UDim2.new(0.8, 0, 0, 40)
@@ -122,7 +121,7 @@ local function logMsg(msg)
     termScroll.CanvasPosition = Vector2.new(0, termScroll.AbsoluteWindowSize.Y + 9999)
 end
 
-logMsg("Inspector GUI loaded. Turn ON and click a button!")
+logMsg("Scanner 3D Carregado. Clique em 'SCAN 3D BAR'!")
 
 termCopyBtn.MouseButton1Click:Connect(function()
     if setclipboard then
@@ -130,6 +129,8 @@ termCopyBtn.MouseButton1Click:Connect(function()
         termCopyBtn.Text = "OK!"
         task.wait(1)
         termCopyBtn.Text = "COPY"
+    else
+        logMsg("❌ Erro: Executor não suporta setclipboard.")
     end
 end)
 
@@ -150,44 +151,57 @@ termCloseBtn.MouseButton1Click:Connect(function()
     logToggleBtn.Text = "SHOW LOGS"
 end)
 
-local isSpying = false
-
-toggleBtn.MouseButton1Click:Connect(function()
-    isSpying = not isSpying
-
-    if isSpying then
-        toggleBtn.Text = "SPY MODE: ON"
-        toggleBtn.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
-        logMsg("🟢 Modo Espião LIGADO! Pegando TODOS os elementos visuais...")
-    else
-        toggleBtn.Text = "SPY MODE: OFF"
-        toggleBtn.BackgroundColor3 = Color3.fromRGB(50, 200, 50)
-        logMsg("🔴 Modo Espião DESLIGADO!")
+local function scanBillboard(bbg)
+    local foundText = false
+    logMsg("🔎 Encontrado: " .. bbg.Name)
+    logMsg("📁 Caminho: " .. bbg:GetFullName())
+    
+    for _, child in pairs(bbg:GetDescendants()) do
+        if child:IsA("TextLabel") or child:IsA("TextBox") then
+            foundText = true
+            logMsg("   📝 [Texto] " .. child.Name .. " -> Valor: '" .. tostring(child.Text) .. "'")
+            logMsg("   🔗 Path: " .. child:GetFullName())
+        elseif child:IsA("Frame") or child:IsA("ImageLabel") then
+            logMsg("   🖼️ [" .. child.ClassName .. "] " .. child.Name)
+        end
     end
-end)
+    
+    if not foundText then
+        logMsg("   ⚠️ Nenhum texto nesta UI.")
+    end
+    logMsg("--------------------------------------------------")
+end
 
-uis.InputBegan:Connect(function(input, gameProcessed)
-    if not isSpying then return end
+scanBtn.MouseButton1Click:Connect(function()
+    local char = lp.Character
+    if not char then
+        logMsg("❌ Erro: Personagem não encontrado.")
+        return
+    end
 
-    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-        local pos = input.Position
-        local guisDetectadas = lp.PlayerGui:GetGuiObjectsAtPosition(pos.X, pos.Y)
+    logMsg("=== INICIANDO VARREDURA 3D (CABEÇA/BONECO) ===")
+    local achouAlgumaCoisa = false
 
-        if #guisDetectadas > 0 then
-            logMsg("------ CLIQUE DETECTADO ------")
-            local layersExibidas = 0
+    -- 1. Procura se a barra está dentro do modelo do personagem
+    for _, v in pairs(char:GetDescendants()) do
+        if v:IsA("BillboardGui") or v:IsA("SurfaceGui") then
+            achouAlgumaCoisa = true
+            scanBillboard(v)
+        end
+    end
 
-            for _, alvo in ipairs(guisDetectadas) do
-                -- Ignora o nosso próprio menu para não poluir
-                if not alvo:FindFirstAncestor("DevClickerUI") then
-                    layersExibidas = layersExibidas + 1
-                    -- Mostra se é Frame, ImageLabel, TextLabel, etc.
-                    logMsg("[" .. layersExibidas .. "] 🔎 " .. alvo.Name .. " (" .. alvo.ClassName .. ")")
-                    logMsg("📁 " .. alvo:GetFullName())
-                    
-                    -- LIMITE REMOVIDO: Agora ele vai mostrar tudo, mesmo que tenha 10 frames sobrepostos!
-                end
+    -- 2. Procura se a barra está no PlayerGui, mas grudada (Adornee) no personagem
+    for _, v in pairs(lp.PlayerGui:GetDescendants()) do
+        if (v:IsA("BillboardGui") or v:IsA("SurfaceGui")) and v.Adornee then
+            if v.Adornee == char or v.Adornee:IsDescendantOf(char) then
+                achouAlgumaCoisa = true
+                scanBillboard(v)
             end
         end
     end
+
+    if not achouAlgumaCoisa then
+        logMsg("❌ Nenhuma barra flutuante 3D foi encontrada no seu boneco.")
+    end
+    logMsg("=== FIM DA VARREDURA ===")
 end)
