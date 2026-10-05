@@ -10,11 +10,15 @@ repeat task.wait(0.5) until game:IsLoaded()
 repeat task.wait(0.5) until lp.Character and lp.Character:FindFirstChild("HumanoidRootPart")
 
 local function logMsg(msg)
-    if getgenv().LogMsg then getgenv().LogMsg(msg) else print("Delivery: " .. tostring(msg)) end
+    local prefix = "[V31-DEBUG] "
+    if getgenv().LogMsg then
+        getgenv().LogMsg(prefix .. msg)
+    else
+        print(prefix .. tostring(msg))
+    end
 end
 
-logMsg("Motor V30: Pathfinder Nativo ativado! Desenhando rota inteligente até o centro.")
-task.wait(6)
+logMsg("Iniciando Motor V31 com Logs Extremos e Fix de Queda...")
 
 pcall(function() ws.FallenPartsDestroyHeight = -50000 end)
 
@@ -23,7 +27,6 @@ if getgenv().NoclipLoop then getgenv().NoclipLoop:Disconnect() end
 if getgenv().AntiSeatLoop then getgenv().AntiSeatLoop:Disconnect() end
 if getgenv().AntiAfkConnection then getgenv().AntiAfkConnection:Disconnect() end
 if getgenv().AntiAfkLoop then pcall(task.cancel, getgenv().AntiAfkLoop) end
-if getgenv().AntiVoidLoop then getgenv().AntiVoidLoop:Disconnect() end
 
 getgenv().AutoFarmDelivery = true
 getgenv().JobPhase = "Init"
@@ -49,27 +52,26 @@ getgenv().AntiAfkLoop = task.spawn(function()
     end
 end)
 
-getgenv().AntiSeatLoop = game:GetService("RunService").Heartbeat:Connect(function()
+getgenv().AntiSeatLoop = rs.Heartbeat:Connect(function()
     if not getgenv().AutoFarmDelivery then return end
     local c = lp.Character
     if c then
         local hum = c:FindFirstChildOfClass("Humanoid")
         local rt = c:FindFirstChild("HumanoidRootPart")
-        if hum and rt then
-            if hum.Sit then
-                local seatPart = hum.SeatPart
-                if seatPart and not seatPart:IsA("VehicleSeat") then
-                    if seatPart:FindFirstChild("SeatWeld") then seatPart.SeatWeld:Destroy() end
-                    hum.Sit = false
-                    rt.CFrame = rt.CFrame + Vector3.new(0, 5, 0)
-                    hum:ChangeState(Enum.HumanoidStateType.Running)
-                end
+        if hum and rt and hum.Sit then
+            local seatPart = hum.SeatPart
+            if seatPart and not seatPart:IsA("VehicleSeat") then
+                if seatPart:FindFirstChild("SeatWeld") then seatPart.SeatWeld:Destroy() end
+                hum.Sit = false
+                rt.CFrame = rt.CFrame + Vector3.new(0, 5, 0)
+                hum:ChangeState(Enum.HumanoidStateType.Running)
+                logMsg("Aviso: Levantou de um assento indesejado.")
             end
         end
     end
 end)
 
-getgenv().NoclipLoop = game:GetService("RunService").Stepped:Connect(function()
+getgenv().NoclipLoop = rs.Stepped:Connect(function()
     if not getgenv().AutoFarmDelivery then return end
     local c = lp.Character
     if c then
@@ -78,15 +80,6 @@ getgenv().NoclipLoop = game:GetService("RunService").Stepped:Connect(function()
                 local n = p.Name
                 if n ~= "HumanoidRootPart" and not n:match("Leg") and not n:match("Foot") then
                     p.CanCollide = false
-                end
-            end
-        end
-        local hum = c:FindFirstChildOfClass("Humanoid")
-        if hum and hum.SeatPart then
-            local car = hum.SeatPart:FindFirstAncestorWhichIsA("Model")
-            if car and car ~= c then
-                for _, p in pairs(car:GetDescendants()) do
-                    if p:IsA("BasePart") then p.CanCollide = false end
                 end
             end
         end
@@ -112,7 +105,6 @@ local function lerPreenchimentoBarra()
     if not head then return false, 0 end
     local bbg = head:FindFirstChild("CharacterBillboard")
     if not bbg then return false, 0 end
-    
     local packageBar = bbg:FindFirstChild("PackageBarFrame", true)
     if packageBar and packageBar.Visible then
         local fill = packageBar:FindFirstChild("Fill", true)
@@ -124,98 +116,102 @@ local function lerPreenchimentoBarra()
     return false, 0
 end
 
--- =========================================================================
--- MOTOR NAVEGADOR COM PATHFINDING
--- =========================================================================
 local function NavegarComPathfinder(targetPos, isPad, anchorRef)
     local c, rt, hum = getChar()
-    if not (rt and hum) then return end
-    
+    if not (rt and hum) then logMsg("Erro: Personagem não encontrado para navegar.") return end
+
+    logMsg("Calculando navegação. Destino Y: " .. tostring(math.floor(targetPos.Y)) .. " | Meu Y: " .. tostring(math.floor(rt.Position.Y)))
+
     local flatCurrent = Vector3.new(rt.Position.X, 0, rt.Position.Z)
     local flatTarget = Vector3.new(targetPos.X, 0, targetPos.Z)
     local distInicial = (flatCurrent - flatTarget).Magnitude
-    
-    -- Teleporte de aproximação (para mapas enormes)
+
     if distInicial > 45 then
+        logMsg("Distância alta (" .. math.floor(distInicial) .. "m). Iniciando teleporte de aproximação...")
         local dir = (flatCurrent - flatTarget).Unit
-        local charOffset = math.random(35, 45)
-        local startPos = Vector3.new(targetPos.X + (dir.X * charOffset), targetPos.Y + 3.5, targetPos.Z + (dir.Z * charOffset))
+        local charOffset = 35
         
+        -- Garante que o spawn seja alto o suficiente para não clipar
+        local startPos = Vector3.new(targetPos.X + (dir.X * charOffset), targetPos.Y + 10, targetPos.Z + (dir.Z * charOffset))
+        
+        logMsg("Criando chão falso na posição X:" .. math.floor(startPos.X) .. " Y:" .. math.floor(startPos.Y - 5) .. " Z:" .. math.floor(startPos.Z))
         local tempFloor = Instance.new("Part")
-        tempFloor.Anchored = true; tempFloor.CanCollide = true; tempFloor.Transparency = 1
-        tempFloor.Size = Vector3.new(200, 2, 200)
-        tempFloor.Position = Vector3.new(targetPos.X, targetPos.Y - 1.5, targetPos.Z)
+        tempFloor.Anchored = true
+        tempFloor.CanCollide = true
+        tempFloor.Transparency = 0.5
+        tempFloor.Size = Vector3.new(200, 5, 200)
+        tempFloor.Position = Vector3.new(startPos.X, startPos.Y - 5, startPos.Z)
         tempFloor.Parent = ws
         game:GetService("Debris"):AddItem(tempFloor, 15)
-        
+
         rt.Velocity = Vector3.zero
+        rt.Anchored = true -- Prende o boneco no ar para o mapa carregar em volta
         rt.CFrame = CFrame.new(startPos)
-        task.wait(0.5)
+        
+        logMsg("Aguardando 1.5s para carregamento do mapa...")
+        task.wait(1.5)
+        rt.Anchored = false
+        logMsg("Boneco solto. Y atual: " .. tostring(math.floor(rt.Position.Y)))
     end
+
+    hum.PlatformStand = false
+    hum.Sit = false
+    hum:ChangeState(Enum.HumanoidStateType.Running)
+
+    logMsg("Solicitando rota ao PathfindingService...")
+    local path = pfs:CreatePath({ AgentRadius = 2, AgentHeight = 5, AgentCanJump = true })
     
-    hum.PlatformStand = false; hum.Sit = false; hum:ChangeState(Enum.HumanoidStateType.Running)
-    
-    -- CRIANDO ROTA INTELIGENTE (PATHFINDING)
-    local path = pfs:CreatePath({
-        AgentRadius = 2,
-        AgentHeight = 5,
-        AgentCanJump = true
-    })
-    
-    c, rt, hum = getChar()
     local success, err = pcall(function()
         path:ComputeAsync(rt.Position, targetPos)
     end)
-    
+
+    if not success then
+        logMsg("CRÍTICO: Erro no ComputeAsync do pathfinder: " .. tostring(err))
+    end
+
     if success and path.Status == Enum.PathStatus.Success then
-        logMsg("🗺️ Rota Pathfinder gerada! Seguindo waypoints...")
         local waypoints = path:GetWaypoints()
+        logMsg("Sucesso! Rota gerada com " .. #waypoints .. " waypoints.")
         
         for i, wp in ipairs(waypoints) do
             c, rt, hum = getChar()
             if not (rt and hum) then return end
-            if rt.Position.Y - targetPos.Y < -15 then return end -- Caiu no void
             
-            -- LÓGICA DO ALVO (Coletas/Entregas)
+            if rt.Position.Y < -50 then
+                logMsg("ALERTA: BONECO CAIU NO VOID! Y: " .. tostring(math.floor(rt.Position.Y)))
+                return
+            end
+
             if not isPad and anchorRef then
                 if anchorRef.Parent ~= ws then
-                    logMsg("✅ Alvo sumiu! Ação concluída com sucesso.")
+                    logMsg("Alvo sumiu (provavelmente coletado). Parando rota.")
                     return
                 end
                 
-                -- Se a distância ao centro do alvo for menor que 8, começa a testar coleta
                 local distToTarget = (rt.Position * Vector3.new(1,0,1) - targetPos * Vector3.new(1,0,1)).Magnitude
                 if distToTarget <= 8 then
                     fRem("AttemptDeliveryComplete")
                     fRem("AttemptDeliveryPickup")
                     
-                    -- TRAVA SUPREMA
                     local vis, pct = lerPreenchimentoBarra()
                     if vis and pct > 0 then
-                        logMsg("🛑 Zona de Coleta alcançada! Fill em " .. math.floor(pct*100) .. "%. Congelando no waypoint!")
+                        logMsg("Trava Suprema ativada! Congelando no waypoint.")
                         rt.Velocity = Vector3.zero
                         hum:MoveTo(rt.Position)
-                        
-                        local tempoUltimoLog = tick()
-                        while anchorRef.Parent == ws do
+                        local timeoutColeta = 0
+                        while anchorRef.Parent == ws and timeoutColeta < 50 do
                             local v, p = lerPreenchimentoBarra()
                             if not v or p >= 0.99 then break end
-                            if tick() - tempoUltimoLog >= 1.0 then
-                                logMsg("📊 Progresso do Produto: " .. math.floor(p*100) .. "%")
-                                tempoUltimoLog = tick()
-                            end
                             task.wait(0.1)
+                            timeoutColeta = timeoutColeta + 1
                         end
-                        logMsg("✅ Coleta 100% concluída!")
+                        logMsg("Coleta finalizada.")
                         return
                     end
                 end
             end
-            
-            -- SEGUINDO A ROTA NATIVA
-            if wp.Action == Enum.PathWaypointAction.Jump then
-                hum.Jump = true
-            end
+
+            if wp.Action == Enum.PathWaypointAction.Jump then hum.Jump = true end
             hum:MoveTo(wp.Position)
             
             local moveOut = 0
@@ -223,34 +219,26 @@ local function NavegarComPathfinder(targetPos, isPad, anchorRef)
                 c, rt, hum = getChar()
                 if not (rt and hum) then break end
                 local distWp = (rt.Position * Vector3.new(1,0,1) - wp.Position * Vector3.new(1,0,1)).Magnitude
-                if distWp <= 3.5 then break end -- Chegou no pontinho, vai pro próximo
+                if distWp <= 3.5 then break end
                 moveOut = moveOut + 1
                 task.wait(0.1)
             end
         end
-        
-        -- Chegou no final de todos os waypoints, firma o pé no centro
-        c, rt, hum = getChar()
-        if hum and rt then
-            rt.Velocity = Vector3.zero
-            hum:MoveTo(rt.Position)
-        end
-        
+        logMsg("Fim dos waypoints.")
+        if rt then rt.Velocity = Vector3.zero; hum:MoveTo(rt.Position) end
     else
-        logMsg("⚠️ Pathfinder falhou. Rota direta (Fallback)...")
+        logMsg("Aviso: Pathfinder falhou. Status: " .. tostring(path.Status) .. ". Usando Fallback direto.")
         local timeOut = 0
-        while timeOut < 150 do 
+        while timeOut < 150 do
             c, rt, hum = getChar()
             if not (rt and hum) then break end
             
             if not isPad and anchorRef then
                 if anchorRef.Parent ~= ws then return end
-                
                 local distToTarget = (rt.Position * Vector3.new(1,0,1) - targetPos * Vector3.new(1,0,1)).Magnitude
                 if distToTarget <= 6 then
                     fRem("AttemptDeliveryComplete")
                     fRem("AttemptDeliveryPickup")
-                    
                     local vis, pct = lerPreenchimentoBarra()
                     if vis and pct > 0 then
                         rt.Velocity = Vector3.zero
@@ -264,14 +252,10 @@ local function NavegarComPathfinder(targetPos, isPad, anchorRef)
                     end
                 end
             end
-            
+
             local distAtual = (rt.Position * Vector3.new(1,0,1) - targetPos * Vector3.new(1,0,1)).Magnitude
-            if distAtual <= 3.5 then 
-                hum:MoveTo(rt.Position)
-                break 
-            else
-                hum:MoveTo(targetPos)
-            end
+            if distAtual <= 3.5 then hum:MoveTo(rt.Position); break
+            else hum:MoveTo(targetPos) end
             
             timeOut = timeOut + 1
             task.wait(0.1)
@@ -279,22 +263,16 @@ local function NavegarComPathfinder(targetPos, isPad, anchorRef)
     end
 end
 
--- =========================================================================
--- LOOP PRINCIPAL DO FARM
--- =========================================================================
 getgenv().DeliveryLoop = task.spawn(function()
     while task.wait(0.2) do
         if not getgenv().AutoFarmDelivery then break end
         
-        if ws:FindFirstChild("DeliveryTargetAnchor") then
-            getgenv().JobPhase = "Farming"
-        end
-        
+        if ws:FindFirstChild("DeliveryTargetAnchor") then getgenv().JobPhase = "Farming" end
+
         if getgenv().JobPhase == "Init" then
             local modeStr = getgenv().DeliveryMode
             local mode = (modeStr == "Hard" or modeStr == "HighRisk") and "HighRisk" or "Safe"
             local pad = nil
-            
             for _,v in pairs(ws:GetDescendants()) do
                 if v:IsA("ProximityPrompt") and v.Name == "JobPadPrompt" then pad = v; break end
             end
@@ -305,14 +283,13 @@ getgenv().DeliveryLoop = task.spawn(function()
                 local dist = rt and (rt.Position * Vector3.new(1,0,1) - padPos * Vector3.new(1,0,1)).Magnitude or 999
                 
                 if dist > 6 then
-                    logMsg("🚶 Desenhando rota para o Pad...")
+                    logMsg("Iniciando navegação para o Pad de Trabalho.")
                     NavegarComPathfinder(padPos, true, nil)
                 end
                 
-                logMsg("📍 No Pad! Iniciando trabalho e pulando pra rota...")
+                logMsg("No Pad. Pegando trabalho...")
                 c, rt, hum = getChar()
                 if hum and rt then hum:MoveTo(rt.Position) end
-                
                 fRem("RequestStartJobSession", "Delivery", "jobPad", mode)
                 task.wait(0.5)
                 fRem("AttemptDeliveryPickup")
@@ -321,20 +298,20 @@ getgenv().DeliveryLoop = task.spawn(function()
             else
                 task.wait(2)
             end
-            
         elseif getgenv().JobPhase == "Farming" then
             local t = ws:FindFirstChild("DeliveryTargetAnchor")
             if t and t.Parent == ws then
                 if t ~= getgenv().LastAnchor then
-                    
+                    logMsg("Novo Anchor detectado. Iniciando perseguição.")
                     NavegarComPathfinder(t.Position, false, t)
-                    
                     getgenv().LastAnchor = t
                     local tempoCasa = math.random(30, 50) / 10
-                    logMsg("📦 Partindo para o próximo alvo em " .. tempoCasa .. "s...")
+                    logMsg("Aguardando " .. tempoCasa .. "s para próximo alvo...")
                     task.wait(tempoCasa)
-                    
-                    task.spawn(function() task.wait(1.5); if getgenv().LastAnchor == t then getgenv().LastAnchor = nil end end)
+                    task.spawn(function()
+                        task.wait(1.5)
+                        if getgenv().LastAnchor == t then getgenv().LastAnchor = nil end
+                    end)
                 end
             else
                 task.wait(0.1)
