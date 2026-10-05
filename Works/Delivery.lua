@@ -5,7 +5,7 @@ local lp = players.LocalPlayer
 local remotes = rs:WaitForChild("Remotes")
 
 -- =========================================================================
--- TRAVA DE INICIALIZAÇÃO (CORREÇÃO DA PRIMEIRA VEZ)
+-- TRAVA DE INICIALIZAÇÃO (AGUARDA MAPA)
 -- =========================================================================
 repeat task.wait(0.5) until game:IsLoaded()
 repeat task.wait(0.5) until lp.Character and lp.Character:FindFirstChild("HumanoidRootPart")
@@ -14,9 +14,9 @@ local function logMsg(msg)
     if getgenv().LogMsg then getgenv().LogMsg(msg) else print("Delivery: " .. tostring(msg)) end
 end
 
-logMsg("Motor V10: Aguardando 6 segundos de seguranca para carregar o mapa...")
+logMsg("Motor V12: Iniciando delay de 6s para carregar mapa...")
 task.wait(6)
-logMsg("Iniciando farm de forma segura!")
+logMsg("Caminhada OBRIGATÓRIA no Pad, Teleporte DIRETO na Casa.")
 
 -- =========================================================================
 -- IMUNIDADE AO VOID E LIMPEZA
@@ -167,7 +167,7 @@ local function lerPreenchimentoBarra()
 end
 
 -- =========================================================================
--- FUNÇÃO DE TELEPORTE SMART COM CAMINHADA REAL
+-- FUNÇÃO DE TELEPORTE SMART SEPARADA (INICIO vs CASA)
 -- =========================================================================
 local function SmartTeleport(targetPos, isDelivery)
     local c, rt, hum = getChar()
@@ -208,24 +208,22 @@ local function SmartTeleport(targetPos, isDelivery)
         simularBotao("Throttle", false); simularBotao("Brake", true); task.wait(0.8); simularBotao("Brake", false)
     else
         if rt and hum then
-            local maxTentativas = 3
-            local chegouNoDestino = false
-            for tentativa = 1, maxTentativas do
+            if isDelivery then
+                -- LÓGICA DA CASA: Teleporte DIRETO para não bugar a distância.
+                rt.Velocity = Vector3.zero
+                rt.CFrame = CFrame.new(targetPos + Vector3.new(0, 4, 0))
+                hum.PlatformStand = false
+                hum.Sit = false
+                task.wait(0.5)
+            else
+                -- LÓGICA DO INÍCIO (PAD): Cai a 40 metros e VAI ANDANDO até o centro.
                 local flatCurrent = Vector3.new(rt.Position.X, 0, rt.Position.Z)
                 local flatTarget = Vector3.new(targetPos.X, 0, targetPos.Z)
                 local dir = Vector3.new(1, 0, 0)
                 if (flatCurrent - flatTarget).Magnitude > 1 then dir = (flatCurrent - flatTarget).Unit end
                 
-                local startPos
-                if tentativa == 1 then
-                    -- TELEPORTE LONGE: 35 a 45 studs de distância.
-                    local charOffset = math.random(35, 45)
-                    startPos = Vector3.new(targetPos.X + (dir.X * charOffset), targetPos.Y + 3.5, targetPos.Z + (dir.Z * charOffset))
-                else
-                    local angulo = math.random() * math.pi * 2
-                    local dist = math.random(35, 45)
-                    startPos = Vector3.new(targetPos.X + math.cos(angulo) * dist, targetPos.Y + 3.5, targetPos.Z + math.sin(angulo) * dist)
-                end
+                local charOffset = math.random(35, 45)
+                local startPos = Vector3.new(targetPos.X + (dir.X * charOffset), targetPos.Y + 3.5, targetPos.Z + (dir.Z * charOffset))
                 
                 local tempFloor = Instance.new("Part")
                 tempFloor.Anchored = true; tempFloor.CanCollide = true; tempFloor.Transparency = 1
@@ -246,12 +244,11 @@ local function SmartTeleport(targetPos, isDelivery)
                 while timeOut < 100 do 
                     if rt.Position.Y - targetPos.Y < -15 then break end
                     if (rt.Position * Vector3.new(1,0,1) - targetPos * Vector3.new(1,0,1)).Magnitude < 4.0 then
-                        chegouNoDestino = true; break
+                        break
                     end
                     timeOut = timeOut + 1
                     task.wait(0.1)
                 end
-                if chegouNoDestino then break end
             end
         end
     end
@@ -285,8 +282,8 @@ getgenv().DeliveryLoop = task.spawn(function()
                 local chegouNoCentro = (dist <= distMinima)
                 
                 if not chegouNoCentro then
-                    logMsg("🚶 Caminhando para o centro da rota (" .. mode .. ")...")
-                    SmartTeleport(padPos, false)
+                    logMsg("🚶 Caminhando de longe para o centro do pad (" .. mode .. ")...")
+                    SmartTeleport(padPos, false) -- FALSE = Vai teleportar longe e caminhar.
                     
                     local waitLimit = 0
                     repeat
@@ -308,12 +305,11 @@ getgenv().DeliveryLoop = task.spawn(function()
                 end
 
                 if chegouNoCentro then
-                    logMsg("📍 Chegou no Pad! Iniciando trabalho...")
+                    logMsg("📍 Chegou no Pad! Iniciando e aguardando a barrinha...")
                     fRem("RequestStartJobSession", "Delivery", "jobPad", mode)
                     task.wait(0.5)
                     fRem("AttemptDeliveryPickup")
                     
-                    logMsg("⏳ Aguardando a barra visual (bolsa) encher...")
                     local startTime = tick()
                     local maxEspera = 25
                     local tempoUltimoLog = 0
@@ -326,14 +322,12 @@ getgenv().DeliveryLoop = task.spawn(function()
                             logMsg("📊 Progresso do pacote: " .. porcentagem .. "%")
                             tempoUltimoLog = tick()
                             
-                            -- Se travou no 0%, dá um toquinho pro lado pra acordar o servidor
                             if porcentagem == 0 and not isCar and hum and rt then
                                 local offset = Vector3.new(math.random(-2, 2), 0, math.random(-2, 2))
                                 hum:MoveTo(padPos + offset)
                             end
                         end
 
-                        -- SÓ PASSA DAQUI SE A BARRA ENCHER DE VERDADE
                         if preenchimento >= 0.99 then
                             if hum then hum:MoveTo(rt.Position) end
                             logMsg("✅ Barra chegou em 100%! Esperando delay de segurança...")
@@ -348,7 +342,7 @@ getgenv().DeliveryLoop = task.spawn(function()
                     
                     getgenv().JobPhase = "Farming"
                 else
-                    logMsg("⚠️ O boneco demorou para chegar a pé no pad. Tentando de novo...")
+                    logMsg("⚠️ O boneco não conseguiu chegar no pad. Tentando de novo...")
                     task.wait(1)
                 end
             else
@@ -363,7 +357,7 @@ getgenv().DeliveryLoop = task.spawn(function()
                     local dist = rt and (rt.Position * Vector3.new(1,0,1) - t.Position * Vector3.new(1,0,1)).Magnitude or 999
                     
                     if dist > 55 then
-                        SmartTeleport(t.Position, true)
+                        SmartTeleport(t.Position, true) -- TRUE = Vai teleportar DIRETO pra casa.
                         task.wait(0.5)
                     end
                     
@@ -387,7 +381,7 @@ getgenv().DeliveryLoop = task.spawn(function()
                             if getgenv().LastAnchor == t then getgenv().LastAnchor = nil end
                         end)
                     else
-                        logMsg("⏳ Ajustando posição na casa... Distância atual: " .. math.floor(dist))
+                        logMsg("⏳ Aguardando confirmação da entrega... Distância atual: " .. math.floor(dist))
                         task.wait(1)
                     end
                 end
