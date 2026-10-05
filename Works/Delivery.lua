@@ -5,7 +5,6 @@ local ws = game:GetService("Workspace")
 local rep = game:GetService("ReplicatedStorage")
 local remotes = rep:WaitForChild("Remotes")
 
--- TRAVA DE INICIALIZAÇÃO
 repeat task.wait(0.5) until game:IsLoaded()
 repeat task.wait(0.5) until lp.Character and lp.Character:FindFirstChild("HumanoidRootPart")
 
@@ -13,7 +12,7 @@ local function logMsg(msg)
     if getgenv().LogMsg then getgenv().LogMsg(msg) else print("Delivery: " .. tostring(msg)) end
 end
 
-logMsg("Motor V18: Revertido para estrutura clássica com correção do Fill e chão falso.")
+logMsg("Motor V19: Teleporte direto REMOVIDO! Caminhada ativada para TUDO (Pad e Casa).")
 task.wait(6)
 
 pcall(function() ws.FallenPartsDestroyHeight = -50000 end)
@@ -49,7 +48,6 @@ getgenv().AntiAfkLoop = task.spawn(function()
     end
 end)
 
-local stuckTick = 0
 getgenv().AntiSeatLoop = game:GetService("RunService").Heartbeat:Connect(function()
     if not getgenv().AutoFarmDelivery then return end
     local c = lp.Character
@@ -62,17 +60,9 @@ getgenv().AntiSeatLoop = game:GetService("RunService").Heartbeat:Connect(functio
                 if seatPart and not seatPart:IsA("VehicleSeat") then
                     if seatPart:FindFirstChild("SeatWeld") then seatPart.SeatWeld:Destroy() end
                     hum.Sit = false
-                    stuckTick = stuckTick + 1
-                    if stuckTick > 120 then
-                        rt.CFrame = rt.CFrame + Vector3.new(0, 5, 0)
-                        hum:ChangeState(Enum.HumanoidStateType.Running)
-                        stuckTick = 0
-                    end
-                else
-                    stuckTick = 0
+                    rt.CFrame = rt.CFrame + Vector3.new(0, 5, 0)
+                    hum:ChangeState(Enum.HumanoidStateType.Running)
                 end
-            else
-                stuckTick = 0
             end
         end
     end
@@ -96,10 +86,7 @@ getgenv().NoclipLoop = game:GetService("RunService").Stepped:Connect(function()
             if car and car ~= c then
                 for _, p in pairs(car:GetDescendants()) do
                     if p:IsA("BasePart") then
-                        local n = p.Name:lower()
-                        if not (n:match("wheel") or n:match("tire") or n:match("rim") or n:match("suspension") or n:match("whl")) then
-                            p.CanCollide = false
-                        end
+                        p.CanCollide = false
                     end
                 end
             end
@@ -119,26 +106,8 @@ local function getChar()
     return c, (c and c:FindFirstChild("HumanoidRootPart")), (c and c:FindFirstChild("Humanoid"))
 end
 
-local function simularBotao(nomeBotao, pressionar)
-    local btn = lp.PlayerGui:FindFirstChild(nomeBotao, true)
-    if btn then
-        pcall(function()
-            local vimCentro = game:GetService("VirtualInputManager")
-            local centroX = btn.AbsolutePosition.X + (btn.AbsoluteSize.X / 2)
-            local centroY = btn.AbsolutePosition.Y + (btn.AbsoluteSize.Y / 2)
-            vimCentro:SendMouseButtonEvent(centroX, centroY, 0, pressionar, game, 0)
-        end)
-        if getconnections then
-            local estado = pressionar and Enum.UserInputState.Begin or Enum.UserInputState.End
-            for _, conn in pairs(getconnections(pressionar and btn.InputBegan or btn.InputEnded)) do
-                pcall(function() conn.Function({UserInputType = Enum.UserInputType.Touch, UserInputState = estado}) end)
-            end
-        end
-    end
-end
-
 -- =========================================================================
--- LEITURA CORRIGIDA GRAÇAS AO SEU LOG (AGORA LÊ O 'Fill')
+-- LEITURA DO FILL CORRIGIDA (DIRETA E SEM ERROS)
 -- =========================================================================
 local function lerPreenchimentoBarra()
     local c = lp.Character
@@ -148,107 +117,55 @@ local function lerPreenchimentoBarra()
     local bbg = head:FindFirstChild("CharacterBillboard")
     if not bbg then return 0 end
     
-    local packageBar = bbg:FindFirstChild("PackageBarFrame", true)
-    if packageBar and packageBar.Visible then
-        local fill = packageBar:FindFirstChild("Fill", true)
-        if fill and fill:IsA("Frame") then
-            return fill.Size.X.Scale
-        end
+    local fill = bbg:FindFirstChild("Fill", true)
+    if fill and fill:IsA("Frame") then
+        return fill.Size.X.Scale
     end
     return 0
 end
 
-local function SmartTeleport(targetPos, isDelivery)
+-- =========================================================================
+-- TELEPORTE + CAMINHADA (PARA PAD E CASA IGUAL)
+-- =========================================================================
+local function SmartTeleport(targetPos)
     local c, rt, hum = getChar()
-    local car = nil
-    if hum and hum.SeatPart then
-        local seatModel = hum.SeatPart:FindFirstAncestorWhichIsA("Model")
-        if seatModel and seatModel ~= c then car = seatModel end
-    end
-
-    if car then
-        local cPart = car.PrimaryPart or car:FindFirstChildWhichIsA("BasePart", true)
-        local allVehicleParts = cPart:GetConnectedParts(true)
-        local currentPivot = car:GetPivot()
-        
-        local flatCurrent = Vector3.new(currentPivot.Position.X, 0, currentPivot.Position.Z)
-        local flatTarget = Vector3.new(targetPos.X, 0, targetPos.Z)
-        local dir = Vector3.new(1, 0, 0)
-        if (flatCurrent - flatTarget).Magnitude > 1 then dir = (flatCurrent - flatTarget).Unit end
-        
-        local carOffset = math.random(85, 100)
-        local startPos = Vector3.new(targetPos.X + (dir.X * carOffset), targetPos.Y + 10, targetPos.Z + (dir.Z * carOffset))
-        local destCFrame = CFrame.new(startPos, Vector3.new(targetPos.X, startPos.Y, targetPos.Z))
-        
-        for i = 1, 15 do
-            car:PivotTo(destCFrame)
-            for _, p in pairs(allVehicleParts) do
-                p.AssemblyLinearVelocity = Vector3.zero; p.AssemblyAngularVelocity = Vector3.zero
-            end
-            task.wait()
-        end
-        
-        simularBotao("Left", false); simularBotao("Right", false); simularBotao("Throttle", true)
-        local timeOut = 0
-        while timeOut < 6 do
-            if (cPart.Position * Vector3.new(1,0,1) - targetPos * Vector3.new(1,0,1)).Magnitude < 20 then break end
-            timeOut = timeOut + task.wait(0.1)
-        end
-        simularBotao("Throttle", false); simularBotao("Brake", true); task.wait(0.8); simularBotao("Brake", false)
-    else
-        if rt and hum then
-            if isDelivery then
-                -- CHÃO FALSO RESTAURADO: Evita cair no void enquanto o mapa carrega na casa.
-                local tempFloor = Instance.new("Part")
-                tempFloor.Anchored = true; tempFloor.CanCollide = true; tempFloor.Transparency = 1
-                tempFloor.Size = Vector3.new(150, 3, 150)
-                tempFloor.Position = Vector3.new(targetPos.X, targetPos.Y - 2, targetPos.Z)
-                tempFloor.Parent = ws
-                game:GetService("Debris"):AddItem(tempFloor, 5)
-                
-                rt.Velocity = Vector3.zero
-                rt.CFrame = CFrame.new(targetPos + Vector3.new(0, 5, 0))
-                hum.PlatformStand = false
-                hum.Sit = false
-                task.wait(0.5)
-            else
-                local flatCurrent = Vector3.new(rt.Position.X, 0, rt.Position.Z)
-                local flatTarget = Vector3.new(targetPos.X, 0, targetPos.Z)
-                local dir = Vector3.new(1, 0, 0)
-                if (flatCurrent - flatTarget).Magnitude > 1 then dir = (flatCurrent - flatTarget).Unit end
-                
-                local charOffset = math.random(35, 45)
-                local startPos = Vector3.new(targetPos.X + (dir.X * charOffset), targetPos.Y + 3.5, targetPos.Z + (dir.Z * charOffset))
-                
-                local tempFloor = Instance.new("Part")
-                tempFloor.Anchored = true; tempFloor.CanCollide = true; tempFloor.Transparency = 1
-                tempFloor.Size = Vector3.new(150, 2, 150)
-                tempFloor.Position = Vector3.new(targetPos.X, targetPos.Y - 1.5, targetPos.Z)
-                tempFloor.Parent = ws
-                
-                game:GetService("Debris"):AddItem(tempFloor, 15)
-                
-                rt.Velocity = Vector3.zero
-                rt.CFrame = CFrame.new(startPos)
-                hum.PlatformStand = false; hum.Sit = false; hum:ChangeState(Enum.HumanoidStateType.Running)
-                task.wait(0.2)
-                
-                hum:MoveTo(targetPos)
-                
-                local timeOut = 0
-                while timeOut < 100 do 
-                    if rt.Position.Y - targetPos.Y < -15 then break end
-                    if (rt.Position * Vector3.new(1,0,1) - targetPos * Vector3.new(1,0,1)).Magnitude < 4.0 then
-                        break
-                    end
-                    timeOut = timeOut + 1
-                    task.wait(0.1)
-                end
-            end
-        end
+    if not (rt and hum) then return end
+    
+    local flatCurrent = Vector3.new(rt.Position.X, 0, rt.Position.Z)
+    local flatTarget = Vector3.new(targetPos.X, 0, targetPos.Z)
+    local dir = Vector3.new(1, 0, 0)
+    if (flatCurrent - flatTarget).Magnitude > 1 then dir = (flatCurrent - flatTarget).Unit end
+    
+    -- Cai a ~40 studs de distância
+    local charOffset = math.random(35, 45)
+    local startPos = Vector3.new(targetPos.X + (dir.X * charOffset), targetPos.Y + 3.5, targetPos.Z + (dir.Z * charOffset))
+    
+    local tempFloor = Instance.new("Part")
+    tempFloor.Anchored = true; tempFloor.CanCollide = true; tempFloor.Transparency = 1
+    tempFloor.Size = Vector3.new(150, 2, 150)
+    tempFloor.Position = Vector3.new(targetPos.X, targetPos.Y - 1.5, targetPos.Z)
+    tempFloor.Parent = ws
+    game:GetService("Debris"):AddItem(tempFloor, 15)
+    
+    rt.Velocity = Vector3.zero
+    rt.CFrame = CFrame.new(startPos)
+    hum.PlatformStand = false; hum.Sit = false; hum:ChangeState(Enum.HumanoidStateType.Running)
+    task.wait(0.2)
+    
+    -- Caminha a pé até o centro
+    hum:MoveTo(targetPos)
+    local timeOut = 0
+    while timeOut < 100 do 
+        if rt.Position.Y - targetPos.Y < -15 then break end
+        if (rt.Position * Vector3.new(1,0,1) - targetPos * Vector3.new(1,0,1)).Magnitude < 4.0 then break end
+        timeOut = timeOut + 1
+        task.wait(0.1)
     end
 end
 
+-- =========================================================================
+-- LOOP DA ENTREGA
+-- =========================================================================
 getgenv().DeliveryLoop = task.spawn(function()
     while task.wait(0.2) do
         if not getgenv().AutoFarmDelivery then break end
@@ -259,37 +176,24 @@ getgenv().DeliveryLoop = task.spawn(function()
             local pad = nil
             
             for _,v in pairs(ws:GetDescendants()) do
-                if v:IsA("ProximityPrompt") and v.Name == "JobPadPrompt" then
-                    pad = v; break
-                end
+                if v:IsA("ProximityPrompt") and v.Name == "JobPadPrompt" then pad = v; break end
             end
             
             if pad then
                 local padPos = pad.Parent.Position
                 local c, rt, hum = getChar()
                 local dist = rt and (rt.Position * Vector3.new(1,0,1) - padPos * Vector3.new(1,0,1)).Magnitude or 999
-                
-                local isCar = (hum and hum.SeatPart ~= nil)
-                local distMinima = isCar and 25 or 4 
-                local chegouNoCentro = (dist <= distMinima)
+                local chegouNoCentro = (dist <= 4)
                 
                 if not chegouNoCentro then
-                    logMsg("🚶 Caminhando de longe para o centro do pad (" .. mode .. ")...")
-                    SmartTeleport(padPos, false) 
-                    
+                    logMsg("🚶 Caminhando de longe para o centro do pad...")
+                    SmartTeleport(padPos) 
                     local waitLimit = 0
                     repeat
                         c, rt, hum = getChar()
                         if rt and hum then
-                            isCar = (hum.SeatPart ~= nil)
-                            distMinima = isCar and 25 or 4
                             dist = (rt.Position * Vector3.new(1,0,1) - padPos * Vector3.new(1,0,1)).Magnitude
-                            
-                            if dist <= distMinima then
-                                chegouNoCentro = true
-                            else
-                                if not isCar then hum:MoveTo(padPos) end
-                            end
+                            if dist <= 4 then chegouNoCentro = true else hum:MoveTo(padPos) end
                         end
                         waitLimit = waitLimit + 1
                         task.wait(0.5)
@@ -298,6 +202,9 @@ getgenv().DeliveryLoop = task.spawn(function()
 
                 if chegouNoCentro then
                     logMsg("📍 Chegou no Pad! Iniciando trabalho...")
+                    -- TRAVA TOTAL DO BONECO: Se mexer, o jogo zera a bolsa.
+                    if hum then hum:MoveTo(rt.Position) end 
+                    
                     fRem("RequestStartJobSession", "Delivery", "jobPad", mode)
                     task.wait(0.5)
                     fRem("AttemptDeliveryPickup")
@@ -316,20 +223,16 @@ getgenv().DeliveryLoop = task.spawn(function()
                         end
 
                         if preenchimento >= 0.99 then
-                            if hum then hum:MoveTo(rt.Position) end
-                            logMsg("✅ Barra chegou em 100%! Esperando delay de segurança...")
+                            logMsg("✅ Bolsa 100% cheia! Preparando viagem...")
                             break
                         end
                         task.wait(0.1)
                     end
                     
                     local delaySeguranca = math.random(10, 30) / 10
-                    logMsg("⏱️ Aguardando " .. delaySeguranca .. "s extras para fechar a bolsa...")
                     task.wait(delaySeguranca)
-                    
                     getgenv().JobPhase = "Farming"
                 else
-                    logMsg("⚠️ O boneco não conseguiu chegar no pad. Tentando de novo...")
                     task.wait(1)
                 end
             else
@@ -344,7 +247,9 @@ getgenv().DeliveryLoop = task.spawn(function()
                     local dist = rt and (rt.Position * Vector3.new(1,0,1) - t.Position * Vector3.new(1,0,1)).Magnitude or 999
                     
                     if dist > 55 then
-                        SmartTeleport(t.Position, true) 
+                        logMsg("🚶 Caminhando de longe até a casa para evitar rubberband...")
+                        -- AQUI ESTAVA O SEU MAIOR PROBLEMA. AGORA ELE CAMINHA ATÉ A CASA TAMBÉM!
+                        SmartTeleport(t.Position) 
                         task.wait(0.5)
                     end
                     
@@ -357,18 +262,11 @@ getgenv().DeliveryLoop = task.spawn(function()
                         fRem("AttemptDeliveryComplete")
                         task.wait(0.3)
                         fRem("AttemptDeliveryPickup")
-                        
                         getgenv().LastAnchor = t
-                        local tempoCasa = math.random(50, 70) / 10
-                        logMsg("📦 Pacote entregue! Aguardando " .. tempoCasa .. "s...")
-                        task.wait(tempoCasa)
-                        
-                        task.spawn(function()
-                            task.wait(1.5)
-                            if getgenv().LastAnchor == t then getgenv().LastAnchor = nil end
-                        end)
+                        task.wait(math.random(50, 70) / 10)
+                        task.spawn(function() task.wait(1.5); if getgenv().LastAnchor == t then getgenv().LastAnchor = nil end end)
                     else
-                        logMsg("⏳ Aguardando confirmação da entrega... Distância atual: " .. math.floor(dist))
+                        logMsg("⏳ Ajustando posição final na casa... Distância: " .. math.floor(dist))
                         task.wait(1)
                     end
                 end
