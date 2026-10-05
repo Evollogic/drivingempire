@@ -11,8 +11,8 @@ local function logMsg(msg)
     if getgenv().LogMsg then getgenv().LogMsg(msg) else print("Delivery: " .. tostring(msg)) end
 end
 
-logMsg("Motor V15: Bypass Total. Direto para a entrega sem ir ao Pad!")
-task.wait(2) -- Reduzi o delay inicial, já que você já começa direto
+logMsg("Motor V16: Chão invisível restaurado. Fim do limbo debaixo do mapa!")
+task.wait(2)
 
 pcall(function() ws.FallenPartsDestroyHeight = -50000 end)
 
@@ -105,13 +105,44 @@ end
 
 local function SmartTeleport(targetPos)
     local c, rt, hum = getChar()
-    if rt and hum then
-        -- Teleporte DIRETO para a casa
-        rt.Velocity = Vector3.zero
-        rt.CFrame = CFrame.new(targetPos + Vector3.new(0, 4, 0))
-        hum.PlatformStand = false
-        hum.Sit = false
+    local car = nil
+    if hum and hum.SeatPart then
+        local seatModel = hum.SeatPart:FindFirstAncestorWhichIsA("Model")
+        if seatModel and seatModel ~= c then car = seatModel end
+    end
+
+    if car then
+        local cPart = car.PrimaryPart or car:FindFirstChildWhichIsA("BasePart", true)
+        local allVehicleParts = cPart:GetConnectedParts(true)
+        local destCFrame = CFrame.new(targetPos + Vector3.new(0, 5, 0))
+        
+        for i = 1, 15 do
+            car:PivotTo(destCFrame)
+            for _, p in pairs(allVehicleParts) do
+                p.AssemblyLinearVelocity = Vector3.zero
+                p.AssemblyAngularVelocity = Vector3.zero
+            end
+            task.wait()
+        end
         task.wait(0.5)
+    else
+        if rt and hum then
+            -- CHÃO FALSO RESTAURADO: Evita cair no void enquanto o mapa não carrega.
+            local tempFloor = Instance.new("Part")
+            tempFloor.Anchored = true
+            tempFloor.CanCollide = true
+            tempFloor.Transparency = 1
+            tempFloor.Size = Vector3.new(150, 2, 150)
+            tempFloor.Position = Vector3.new(targetPos.X, targetPos.Y - 2, targetPos.Z)
+            tempFloor.Parent = ws
+            game:GetService("Debris"):AddItem(tempFloor, 5) -- Segura o boneco por 5s
+            
+            rt.Velocity = Vector3.zero
+            rt.CFrame = CFrame.new(targetPos + Vector3.new(0, 6, 0))
+            hum.PlatformStand = false
+            hum.Sit = false
+            task.wait(0.5)
+        end
     end
 end
 
@@ -119,7 +150,6 @@ getgenv().DeliveryLoop = task.spawn(function()
     while task.wait(0.2) do
         if not getgenv().AutoFarmDelivery then break end
         
-        -- RADAR DIRETO: Se o alvo já existe, corta pra entrega na hora!
         local targetAnchor = ws:FindFirstChild("DeliveryTargetAnchor")
         if targetAnchor and targetAnchor.Parent == ws then
             getgenv().JobPhase = "Farming"
@@ -135,7 +165,6 @@ getgenv().DeliveryLoop = task.spawn(function()
             fRem("AttemptDeliveryPickup")
             
             local startTime = tick()
-            -- Aguarda até o servidor spawnar a âncora da casa no mapa
             while tick() - startTime < 10 do
                 if ws:FindFirstChild("DeliveryTargetAnchor") then
                     logMsg("✅ Alvo detectado no mapa! Iniciando entrega...")
