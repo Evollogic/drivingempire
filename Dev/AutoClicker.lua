@@ -17,8 +17,8 @@ local mainFrame = Instance.new("Frame", sg)
 mainFrame.Size = UDim2.new(0, 200, 0, 140)
 mainFrame.Position = UDim2.new(0.5, -350, 0.5, -50)
 mainFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 25)
-mainFrame.Active = true 
-mainFrame.Draggable = true 
+mainFrame.Active = true
+mainFrame.Draggable = true
 Instance.new("UICorner", mainFrame).CornerRadius = UDim.new(0, 10)
 Instance.new("UIStroke", mainFrame).Color = Color3.fromRGB(0, 255, 255)
 
@@ -108,7 +108,7 @@ local termList = Instance.new("UIListLayout", termScroll)
 local function logMsg(msg)
     local t = os.date("%H:%M:%S") .. " | " .. tostring(msg)
     table.insert(allLogs, t)
-    
+
     local txt = Instance.new("TextLabel", termScroll)
     txt.Size = UDim2.new(1, 0, 0, 0)
     txt.AutomaticSize = Enum.AutomaticSize.Y
@@ -118,7 +118,7 @@ local function logMsg(msg)
     txt.TextXAlignment = Enum.TextXAlignment.Left
     txt.TextWrapped = true
     txt.Text = t
-    
+
     termScroll.CanvasPosition = Vector2.new(0, termScroll.AbsoluteWindowSize.Y + 9999)
 end
 
@@ -157,33 +157,35 @@ toggleBtn.MouseButton1Click:Connect(function()
 
     if isSpying then
         toggleBtn.Text = "SPY MODE: ON"
-        toggleBtn.BackgroundColor3 = Color3.fromRGB(200, 50, 50) 
-        logMsg("🟢 Modo Espião LIGADO! Mapeando camadas...")
+        toggleBtn.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
+        logMsg("🟢 Modo Espião LIGADO! Pegando TODOS os elementos visuais...")
     else
         toggleBtn.Text = "SPY MODE: OFF"
-        toggleBtn.BackgroundColor3 = Color3.fromRGB(50, 200, 50) 
+        toggleBtn.BackgroundColor3 = Color3.fromRGB(50, 200, 50)
         logMsg("🔴 Modo Espião DESLIGADO!")
     end
 end)
 
 uis.InputBegan:Connect(function(input, gameProcessed)
     if not isSpying then return end
-    
+
     if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
         local pos = input.Position
         local guisDetectadas = lp.PlayerGui:GetGuiObjectsAtPosition(pos.X, pos.Y)
-        
+
         if #guisDetectadas > 0 then
             logMsg("------ CLIQUE DETECTADO ------")
             local layersExibidas = 0
-            
+
             for _, alvo in ipairs(guisDetectadas) do
+                -- Ignora o nosso próprio menu para não poluir
                 if not alvo:FindFirstAncestor("DevClickerUI") then
                     layersExibidas = layersExibidas + 1
+                    -- Mostra se é Frame, ImageLabel, TextLabel, etc.
                     logMsg("[" .. layersExibidas .. "] 🔎 " .. alvo.Name .. " (" .. alvo.ClassName .. ")")
                     logMsg("📁 " .. alvo:GetFullName())
                     
-                    if layersExibidas >= 3 then break end
+                    -- LIMITE REMOVIDO: Agora ele vai mostrar tudo, mesmo que tenha 10 frames sobrepostos!
                 end
             end
         end
