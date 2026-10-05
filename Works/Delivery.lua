@@ -12,7 +12,7 @@ local function logMsg(msg)
     if getgenv().LogMsg then getgenv().LogMsg(msg) else print("Delivery: " .. tostring(msg)) end
 end
 
-logMsg("Motor V24: Trava Suprema ativada! Se a barra sair de 0%, TUDO é cancelado até dar 100%.")
+logMsg("Motor V25: Rota direta ao alvo! Para SÓ QUANDO o Fill começar a encher. Pad livre de travas!")
 task.wait(6)
 
 pcall(function() ws.FallenPartsDestroyHeight = -50000 end)
@@ -123,44 +123,10 @@ local function lerPreenchimentoBarra()
     return false, 0
 end
 
-local function AguardarColeta()
-    local isVis = false
-    local pct = 0
-    local checkTimer = tick()
-    
-    while tick() - checkTimer < 2.5 do
-        isVis, pct = lerPreenchimentoBarra()
-        if isVis then break end
-        task.wait(0.2)
-    end
-    
-    if isVis then
-        logMsg("⏳ Barra detectada! Congelando boneco...")
-        local _, rt, hum = getChar()
-        if hum and rt then hum:MoveTo(rt.Position) end
-        
-        local startTime = tick()
-        local tempoUltimoLog = 0
-        
-        while tick() - startTime < 25 do
-            local vis, p = lerPreenchimentoBarra()
-            local perc = math.floor(p * 100)
-            
-            if tick() - tempoUltimoLog >= 1.0 then
-                if p > 0 then logMsg("📊 Progresso do Produto: " .. perc .. "%") end
-                tempoUltimoLog = tick()
-            end
-            
-            if p >= 0.99 or not vis then
-                logMsg("✅ Coleta/Entrega 100% concluída!")
-                break
-            end
-            task.wait(0.1)
-        end
-    end
-end
-
-local function CaminharAteAlvo(targetPos, breakDist)
+-- =========================================================================
+-- FUNÇÃO 1: CAMINHAR SÓ PARA O PAD (Sem checar barra)
+-- =========================================================================
+local function CaminharPad(targetPos)
     local c, rt, hum = getChar()
     if not (rt and hum) then return end
     
@@ -174,38 +140,112 @@ local function CaminharAteAlvo(targetPos, breakDist)
     
     local tempFloor = Instance.new("Part")
     tempFloor.Anchored = true; tempFloor.CanCollide = true; tempFloor.Transparency = 1
-    tempFloor.Size = Vector3.new(200, 2, 200)
-    tempFloor.Position = Vector3.new(targetPos.X, targetPos.Y - 2, targetPos.Z)
+    tempFloor.Size = Vector3.new(150, 2, 150)
+    tempFloor.Position = Vector3.new(targetPos.X, targetPos.Y - 1.5, targetPos.Z)
     tempFloor.Parent = ws
     game:GetService("Debris"):AddItem(tempFloor, 15)
     
     rt.Velocity = Vector3.zero
     rt.CFrame = CFrame.new(startPos)
-    
-    -- Pausa de segurança pra física do jogo sincronizar e evitar rubberband pesado
     task.wait(0.5)
     
     hum.PlatformStand = false; hum.Sit = false; hum:ChangeState(Enum.HumanoidStateType.Running)
     hum:MoveTo(targetPos)
     
     local timeOut = 0
-    while timeOut < 120 do 
+    while timeOut < 100 do 
+        c, rt, hum = getChar()
+        if not (rt and hum) then break end
+        
+        local distAtual = (rt.Position * Vector3.new(1,0,1) - targetPos * Vector3.new(1,0,1)).Magnitude
+        if distAtual <= 4 then 
+            hum:MoveTo(rt.Position)
+            break 
+        end
+        timeOut = timeOut + 1
+        task.wait(0.1)
+    end
+end
+
+-- =========================================================================
+-- FUNÇÃO 2: CAMINHAR E PROCESSAR ALVO (Casas e Coletas)
+-- =========================================================================
+local function ProcessarAlvo(t)
+    local c, rt, hum = getChar()
+    if not (rt and hum) then return end
+    local targetPos = t.Position
+    
+    local flatCurrent = Vector3.new(rt.Position.X, 0, rt.Position.Z)
+    local flatTarget = Vector3.new(targetPos.X, 0, targetPos.Z)
+    local dir = Vector3.new(1, 0, 0)
+    if (flatCurrent - flatTarget).Magnitude > 1 then dir = (flatCurrent - flatTarget).Unit end
+    
+    local charOffset = math.random(35, 45)
+    local startPos = Vector3.new(targetPos.X + (dir.X * charOffset), targetPos.Y + 3.5, targetPos.Z + (dir.Z * charOffset))
+    
+    local tempFloor = Instance.new("Part")
+    tempFloor.Anchored = true; tempFloor.CanCollide = true; tempFloor.Transparency = 1
+    tempFloor.Size = Vector3.new(200, 2, 200)
+    tempFloor.Position = Vector3.new(targetPos.X, targetPos.Y - 1.5, targetPos.Z)
+    tempFloor.Parent = ws
+    game:GetService("Debris"):AddItem(tempFloor, 15)
+    
+    rt.Velocity = Vector3.zero
+    rt.CFrame = CFrame.new(startPos)
+    task.wait(0.5)
+    
+    hum.PlatformStand = false; hum.Sit = false; hum:ChangeState(Enum.HumanoidStateType.Running)
+    logMsg("🚶 Caminhando até o destino...")
+    hum:MoveTo(targetPos)
+    
+    local timeOut = 0
+    local chegouNoCentro = false
+    
+    while timeOut < 150 do 
         c, rt, hum = getChar()
         if not (rt and hum) then break end
         if rt.Position.Y - targetPos.Y < -15 then break end
         
-        -- TRAVA SUPREMA 1: Se a barra saiu de 0% no meio da caminhada, CANCELA TUDO e congela!
-        local vis, pct = lerPreenchimentoBarra()
-        if vis and pct > 0 then
-            logMsg("🛑 TRAVA DE MOVIMENTO: O jogo iniciou a coleta de longe (" .. math.floor(pct*100) .. "%). Congelando!")
-            rt.Velocity = Vector3.zero
-            hum:MoveTo(rt.Position)
+        -- 1. Se a âncora sumir (O jogo aceitou a entrega de perto ou de longe)
+        if t.Parent ~= ws then
+            logMsg("✅ Ponto sumiu! Ação confirmada pelo jogo.")
             break
         end
         
+        -- Dispara pra tentar finalizar entregas comuns assim que o raio do jogo permitir
+        fRem("AttemptDeliveryComplete")
+        fRem("AttemptDeliveryPickup")
+        
+        -- 2. REGRA DE OURO: Parar na hora SÓ se o Fill começar a encher (Saiu do 0%)
+        local vis, pct = lerPreenchimentoBarra()
+        if vis and pct > 0 then
+            logMsg("🛑 Zona de Coleta! O Fill começou a encher (" .. math.floor(pct*100) .. "%). Congelando!")
+            rt.Velocity = Vector3.zero
+            hum:MoveTo(rt.Position) -- Vira estátua na hora
+            
+            local tempoUltimoLog = tick()
+            while t.Parent == ws do
+                local v, p = lerPreenchimentoBarra()
+                if not v or p >= 0.99 then break end
+                
+                if tick() - tempoUltimoLog >= 1.0 then
+                    logMsg("📊 Progresso do Produto: " .. math.floor(p*100) .. "%")
+                    tempoUltimoLog = tick()
+                end
+                task.wait(0.1)
+            end
+            
+            logMsg("✅ Coleta 100% concluída!")
+            break
+        end
+        
+        -- 3. Chegou no centro, mas a barra ainda não apareceu ou não encheu
         local distAtual = (rt.Position * Vector3.new(1,0,1) - targetPos * Vector3.new(1,0,1)).Magnitude
-        if distAtual <= breakDist then 
-            break 
+        if distAtual <= 4 and not chegouNoCentro then
+            chegouNoCentro = true
+            hum:MoveTo(rt.Position) -- Fica parado no centro esperando
+        elseif not chegouNoCentro then
+            hum:MoveTo(targetPos) -- Garante que ele continue caminhando até o centro
         end
         
         timeOut = timeOut + 1
@@ -213,30 +253,16 @@ local function CaminharAteAlvo(targetPos, breakDist)
     end
 end
 
+-- =========================================================================
+-- LOOP PRINCIPAL DO FARM
+-- =========================================================================
 getgenv().DeliveryLoop = task.spawn(function()
     while task.wait(0.2) do
         if not getgenv().AutoFarmDelivery then break end
         
-        -- TRAVA SUPREMA 2: Proteção total do loop principal.
-        -- Se a barra estiver em andamento, o script ignora teleportes, distâncias e apenas assiste.
-        local vM, pM = lerPreenchimentoBarra()
-        if vM and pM > 0 and pM < 0.99 then
-            logMsg("🛑 TRAVA MÁXIMA: Coleta em andamento (" .. math.floor(pM*100) .. "%). Bloqueando teleportes!")
-            local c, rt, hum = getChar()
-            if rt and hum then 
-                rt.Velocity = Vector3.zero
-                hum:MoveTo(rt.Position) 
-            end
-            
-            while true do
-                task.wait(0.5)
-                local v, p = lerPreenchimentoBarra()
-                if not v or p >= 0.99 then break end
-                logMsg("📊 Enchendo: " .. math.floor(p*100) .. "%")
-            end
-            logMsg("✅ 100% Atingido! Retomando script...")
-            task.wait(1)
-            -- Como o script esperou, na próxima linha ele naturalmente já processa o fim da entrega
+        -- Bypass imediato se a âncora já existir no mapa
+        if ws:FindFirstChild("DeliveryTargetAnchor") then
+            getgenv().JobPhase = "Farming"
         end
         
         if getgenv().JobPhase == "Init" then
@@ -253,17 +279,17 @@ getgenv().DeliveryLoop = task.spawn(function()
                 local c, rt, hum = getChar()
                 local dist = rt and (rt.Position * Vector3.new(1,0,1) - padPos * Vector3.new(1,0,1)).Magnitude or 999
                 
-                if dist > 15 then
+                if dist > 6 then
                     logMsg("🚶 Caminhando para o pad...")
-                    CaminharAteAlvo(padPos, 10)
-                else
-                    logMsg("📍 Distância aceita no Pad! Iniciando...")
-                    if hum then hum:MoveTo(rt.Position) end
-                    
-                    fRem("RequestStartJobSession", "Delivery", "jobPad", mode)
-                    task.wait(1.5)
-                    getgenv().JobPhase = "Farming"
+                    CaminharPad(padPos)
                 end
+                
+                logMsg("📍 No Pad! Iniciando trabalho e pulando pra rota...")
+                fRem("RequestStartJobSession", "Delivery", "jobPad", mode)
+                task.wait(0.5)
+                fRem("AttemptDeliveryPickup")
+                getgenv().JobPhase = "Farming"
+                task.wait(1.5)
             else
                 task.wait(2)
             end
@@ -272,36 +298,16 @@ getgenv().DeliveryLoop = task.spawn(function()
             local t = ws:FindFirstChild("DeliveryTargetAnchor")
             if t and t.Parent == ws then
                 if t ~= getgenv().LastAnchor then
-                    local c, rt, hum = getChar()
-                    local dist = rt and (rt.Position * Vector3.new(1,0,1) - t.Position * Vector3.new(1,0,1)).Magnitude or 999
                     
-                    if dist > 85 then
-                        logMsg("🚶 Caminhando até o destino (Distância: " .. math.floor(dist) .. ")...")
-                        CaminharAteAlvo(t.Position, 80)
-                    end
+                    -- Toda a lógica de caminhar, parar e ler a barra agora roda na função limpa
+                    ProcessarAlvo(t)
+                    getgenv().LastAnchor = t
                     
-                    c, rt, hum = getChar()
-                    dist = rt and (rt.Position * Vector3.new(1,0,1) - t.Position * Vector3.new(1,0,1)).Magnitude or 999
+                    local tempoCasa = math.random(30, 50) / 10
+                    logMsg("📦 Partindo para o próximo alvo em " .. tempoCasa .. "s...")
+                    task.wait(tempoCasa)
                     
-                    -- Se ele já está perto o suficiente E NÃO ESTÁ PRESO NA TRAVA SUPREMA
-                    local isVis, isPct = lerPreenchimentoBarra()
-                    if dist <= 85 and not (isVis and isPct > 0 and isPct < 0.99) then
-                        logMsg("🎯 Ponto validado! Disparando...")
-                        if hum then hum:MoveTo(rt.Position) end
-                        
-                        fRem("AttemptDeliveryComplete")
-                        task.wait(0.2)
-                        fRem("AttemptDeliveryPickup")
-                        
-                        AguardarColeta()
-                        
-                        getgenv().LastAnchor = t
-                        local tempoCasa = math.random(30, 50) / 10
-                        logMsg("📦 Concluído! Aguardando " .. tempoCasa .. "s para a próxima...")
-                        task.wait(tempoCasa)
-                        
-                        task.spawn(function() task.wait(1.5); if getgenv().LastAnchor == t then getgenv().LastAnchor = nil end end)
-                    end
+                    task.spawn(function() task.wait(1.5); if getgenv().LastAnchor == t then getgenv().LastAnchor = nil end end)
                 end
             else
                 task.wait(0.1)
