@@ -29,7 +29,7 @@ local function logMsg(msg)
     if getgenv().LogMsg then getgenv().LogMsg(msg) else print("Delivery: " .. tostring(msg)) end
 end
 
-logMsg("Motor Corrigido: Radar Inteligente com Teleporte Cego para Mapas Descarregados.")
+logMsg("Motor Corrigido: Coleta Inteligente por Leitura de Barra (100% + Delay)!")
 
 -- =========================================================================
 -- ANTI-AFK
@@ -51,7 +51,6 @@ getgenv().AntiAfkLoop = task.spawn(function()
             vim:SendKeyEvent(true, Enum.KeyCode.F15, false, game)
             task.wait(0.1)
             vim:SendKeyEvent(false, Enum.KeyCode.F15, false, game)
-            logMsg("🛡️ Anti-AFK (Jogo): Tecla fantasma (F15) enviada.")
         end
     end
 end)
@@ -154,7 +153,31 @@ local function simularBotao(nomeBotao, pressionar)
 end
 
 -- =========================================================================
--- FUNÇÃO DE TELEPORTE SMART COM RADAR (RAYCAST) E FORCE-LOAD
+-- LEITOR DA BARRA 3D DA CABEÇA
+-- =========================================================================
+local function lerPreenchimentoBarra()
+    local c = lp.Character
+    if not c then return 0 end
+    local head = c:FindFirstChild("Head")
+    if not head then return 0 end
+    
+    local bbg = head:FindFirstChild("CharacterBillboard")
+    if not bbg then return 0 end
+
+    local packageBar = bbg:FindFirstChild("PackageBarFrame", true)
+    if packageBar and packageBar.Visible then
+        for _, child in pairs(packageBar:GetChildren()) do
+            if child:IsA("Frame") or child:IsA("ImageLabel") then
+                return child.Size.X.Scale
+            end
+        end
+    end
+
+    return 0
+end
+
+-- =========================================================================
+-- FUNÇÃO DE TELEPORTE SMART COM RADAR
 -- =========================================================================
 local function SmartTeleport(targetPos, isDelivery)
     logMsg("--- STARTING SMART TELEPORT ---")
@@ -215,7 +238,6 @@ local function SmartTeleport(targetPos, isDelivery)
                     startPos = Vector3.new(targetPos.X + math.cos(angulo) * dist, targetPos.Y + 3.5, targetPos.Z + math.sin(angulo) * dist)
                 end
 
-                -- RADAR (RAYCAST): Checa se tem chão debaixo do ponto escolhido
                 local rayParams = RaycastParams.new()
                 rayParams.FilterDescendantsInstances = {c}
                 rayParams.FilterType = Enum.RaycastFilterType.Exclude
@@ -226,13 +248,11 @@ local function SmartTeleport(targetPos, isDelivery)
 
                 if not hit then
                     if tentativa < maxTentativas then
-                        logMsg("❌ Radar detectou buraco invisível (Void)! Recalculando rota " .. tentativa)
+                        logMsg("❌ Radar detectou buraco! Recalculando rota " .. tentativa)
                         continue 
                     else
-                        logMsg("⚠️ Bairro não carregou! Forçando teleporte cego com piso gigante para carregar o mapa.")
+                        logMsg("⚠️ Bairro não carregou! Forçando teleporte cego.")
                     end
-                else
-                    logMsg("✅ Caminho validado pelo Radar! Iniciando caminhada...")
                 end
 
                 local tempFloor = Instance.new("Part")
@@ -257,7 +277,6 @@ local function SmartTeleport(targetPos, isDelivery)
                 while timeOut < 4 do
                     local distY = rt.Position.Y - targetPos.Y
                     if distY < -15 then
-                        logMsg("❌ Queda inesperada detectada! Abortando...")
                         break
                     end
                     if (rt.Position * Vector3.new(1,0,1) - targetPos * Vector3.new(1,0,1)).Magnitude < 4.5 then
@@ -312,12 +331,27 @@ getgenv().DeliveryLoop = task.spawn(function()
                     fRem("RequestStartJobSession", "Delivery", "jobPad", mode)
                     task.wait(0.5)
                     fRem("AttemptDeliveryPickup")
-                    local selectedWait = math.random(90, 120) / 10
-                    logMsg("Collection timer STARTED: " .. selectedWait .. "s")
+                    
+                    logMsg("⏳ Lendo a barra de coleta...")
                     local startTime = tick()
-                    task.wait(selectedWait)
-                    local endTime = tick()
-                    logMsg("✅ Timer FINISHED! Time passed: " .. string.format("%.2f", (endTime - startTime)) .. "s")
+                    local maxEspera = 20
+                    
+                    while tick() - startTime < maxEspera do
+                        local preenchimento = lerPreenchimentoBarra()
+                        
+                        -- Se a barra chegou a 100% (1.00) ou muito perto
+                        if preenchimento >= 0.99 then
+                            logMsg("✅ Barra chegou em 100%! Esperando tempo de segurança...")
+                            break
+                        end
+                        task.wait(0.1)
+                    end
+                    
+                    -- Tempo de segurança solicitado (de 1 a 3 segundos)
+                    local delaySeguranca = math.random(10, 30) / 10
+                    logMsg("⏱️ Aguardando " .. delaySeguranca .. "s extras para confirmar a carga...")
+                    task.wait(delaySeguranca)
+                    
                     getgenv().JobPhase = "Farming"
                 else
                     logMsg("⚠️ Warning: Failed to reach the center pad in time. Retrying...")
@@ -333,12 +367,12 @@ getgenv().DeliveryLoop = task.spawn(function()
                 if t ~= getgenv().LastAnchor then
                     SmartTeleport(t.Position, true)
                     
-                    -- Adicionada trava de segurança: só confirma entrega se estiver perto do alvo real
                     local c, rt = getChar()
                     if rt and (rt.Position * Vector3.new(1,0,1) - t.Position * Vector3.new(1,0,1)).Magnitude < 30 then
                         fRem("AttemptDeliveryComplete"); task.wait(0.2); fRem("AttemptDeliveryComplete"); task.wait(0.3)
                         fRem("AttemptDeliveryPickup")
                         getgenv().LastAnchor = t
+                        
                         local tempoCasa = math.random(50, 70) / 10
                         logMsg("📦 Delivered! Waiting " .. tempoCasa .. "s before moving to next house...")
                         task.wait(tempoCasa)
