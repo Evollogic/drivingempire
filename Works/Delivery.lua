@@ -4,6 +4,7 @@ local rs = game:GetService("RunService")
 local ws = game:GetService("Workspace")
 local rep = game:GetService("ReplicatedStorage")
 local remotes = rep:WaitForChild("Remotes")
+local pfs = game:GetService("PathfindingService")
 
 repeat task.wait(0.5) until game:IsLoaded()
 repeat task.wait(0.5) until lp.Character and lp.Character:FindFirstChild("HumanoidRootPart")
@@ -12,7 +13,7 @@ local function logMsg(msg)
     if getgenv().LogMsg then getgenv().LogMsg(msg) else print("Delivery: " .. tostring(msg)) end
 end
 
-logMsg("Motor V29: Física Perfeita da V25 restaurada! Só coleta ao pisar no centro exato.")
+logMsg("Motor V30: Pathfinder Nativo ativado! Desenhando rota inteligente até o centro.")
 task.wait(6)
 
 pcall(function() ws.FallenPartsDestroyHeight = -50000 end)
@@ -124,135 +125,157 @@ local function lerPreenchimentoBarra()
 end
 
 -- =========================================================================
--- FUNÇÃO 1: CAMINHAR SÓ PARA O PAD (Sem checar barra)
+-- MOTOR NAVEGADOR COM PATHFINDING
 -- =========================================================================
-local function CaminharPad(targetPos)
+local function NavegarComPathfinder(targetPos, isPad, anchorRef)
     local c, rt, hum = getChar()
     if not (rt and hum) then return end
     
     local flatCurrent = Vector3.new(rt.Position.X, 0, rt.Position.Z)
     local flatTarget = Vector3.new(targetPos.X, 0, targetPos.Z)
-    local dir = Vector3.new(1, 0, 0)
-    if (flatCurrent - flatTarget).Magnitude > 1 then dir = (flatCurrent - flatTarget).Unit end
+    local distInicial = (flatCurrent - flatTarget).Magnitude
     
-    local charOffset = math.random(35, 45)
-    local startPos = Vector3.new(targetPos.X + (dir.X * charOffset), targetPos.Y + 3.5, targetPos.Z + (dir.Z * charOffset))
-    
-    local tempFloor = Instance.new("Part")
-    tempFloor.Anchored = true; tempFloor.CanCollide = true; tempFloor.Transparency = 1
-    tempFloor.Size = Vector3.new(150, 2, 150)
-    tempFloor.Position = Vector3.new(targetPos.X, targetPos.Y - 1.5, targetPos.Z)
-    tempFloor.Parent = ws
-    game:GetService("Debris"):AddItem(tempFloor, 15)
-    
-    rt.Velocity = Vector3.zero
-    rt.CFrame = CFrame.new(startPos)
-    task.wait(0.5)
-    
-    hum.PlatformStand = false; hum.Sit = false; hum:ChangeState(Enum.HumanoidStateType.Running)
-    
-    local timeOut = 0
-    while timeOut < 100 do 
-        c, rt, hum = getChar()
-        if not (rt and hum) then break end
+    -- Teleporte de aproximação (para mapas enormes)
+    if distInicial > 45 then
+        local dir = (flatCurrent - flatTarget).Unit
+        local charOffset = math.random(35, 45)
+        local startPos = Vector3.new(targetPos.X + (dir.X * charOffset), targetPos.Y + 3.5, targetPos.Z + (dir.Z * charOffset))
         
-        local distAtual = (rt.Position * Vector3.new(1,0,1) - targetPos * Vector3.new(1,0,1)).Magnitude
-        if distAtual <= 3.5 then 
-            hum:MoveTo(rt.Position)
-            break 
-        end
+        local tempFloor = Instance.new("Part")
+        tempFloor.Anchored = true; tempFloor.CanCollide = true; tempFloor.Transparency = 1
+        tempFloor.Size = Vector3.new(200, 2, 200)
+        tempFloor.Position = Vector3.new(targetPos.X, targetPos.Y - 1.5, targetPos.Z)
+        tempFloor.Parent = ws
+        game:GetService("Debris"):AddItem(tempFloor, 15)
         
-        hum:MoveTo(targetPos)
-        timeOut = timeOut + 1
-        task.wait(0.1)
+        rt.Velocity = Vector3.zero
+        rt.CFrame = CFrame.new(startPos)
+        task.wait(0.5)
     end
-end
-
--- =========================================================================
--- FUNÇÃO 2: CAMINHAR E PROCESSAR ALVO (Casas e Coletas)
--- =========================================================================
-local function ProcessarAlvo(t)
-    local c, rt, hum = getChar()
-    if not (rt and hum) then return end
-    local targetPos = t.Position
-    
-    local flatCurrent = Vector3.new(rt.Position.X, 0, rt.Position.Z)
-    local flatTarget = Vector3.new(targetPos.X, 0, targetPos.Z)
-    local dir = Vector3.new(1, 0, 0)
-    if (flatCurrent - flatTarget).Magnitude > 1 then dir = (flatCurrent - flatTarget).Unit end
-    
-    local charOffset = math.random(35, 45)
-    local startPos = Vector3.new(targetPos.X + (dir.X * charOffset), targetPos.Y + 3.5, targetPos.Z + (dir.Z * charOffset))
-    
-    local tempFloor = Instance.new("Part")
-    tempFloor.Anchored = true; tempFloor.CanCollide = true; tempFloor.Transparency = 1
-    tempFloor.Size = Vector3.new(200, 2, 200)
-    tempFloor.Position = Vector3.new(targetPos.X, targetPos.Y - 1.5, targetPos.Z)
-    tempFloor.Parent = ws
-    game:GetService("Debris"):AddItem(tempFloor, 15)
-    
-    rt.Velocity = Vector3.zero
-    rt.CFrame = CFrame.new(startPos)
-    task.wait(0.5)
     
     hum.PlatformStand = false; hum.Sit = false; hum:ChangeState(Enum.HumanoidStateType.Running)
-    logMsg("🚶 Caminhando até o destino...")
     
-    local timeOut = 0
-    local chegouNoCentro = false
+    -- CRIANDO ROTA INTELIGENTE (PATHFINDING)
+    local path = pfs:CreatePath({
+        AgentRadius = 2,
+        AgentHeight = 5,
+        AgentCanJump = true
+    })
     
-    while timeOut < 150 do 
-        c, rt, hum = getChar()
-        if not (rt and hum) then break end
-        if rt.Position.Y - targetPos.Y < -15 then break end
+    c, rt, hum = getChar()
+    local success, err = pcall(function()
+        path:ComputeAsync(rt.Position, targetPos)
+    end)
+    
+    if success and path.Status == Enum.PathStatus.Success then
+        logMsg("🗺️ Rota Pathfinder gerada! Seguindo waypoints...")
+        local waypoints = path:GetWaypoints()
         
-        -- Se a âncora sumir (O jogo aceitou a entrega de perto ou de longe)
-        if t.Parent ~= ws then
-            logMsg("✅ Ponto sumiu! Ação confirmada pelo jogo.")
-            break
-        end
-        
-        local distAtual = (rt.Position * Vector3.new(1,0,1) - targetPos * Vector3.new(1,0,1)).Magnitude
-        
-        -- SÓ TENTA COLETAR E LER A BARRA SE TIVER CHEGADO NO CENTRO EXATO
-        if distAtual <= 3.5 then
-            if not chegouNoCentro then
-                chegouNoCentro = true
-                rt.Velocity = Vector3.zero
-                hum:MoveTo(rt.Position) -- Vira estátua na hora
-                logMsg("🎯 Chegou no centro! Acionando coleta...")
-            end
+        for i, wp in ipairs(waypoints) do
+            c, rt, hum = getChar()
+            if not (rt and hum) then return end
+            if rt.Position.Y - targetPos.Y < -15 then return end -- Caiu no void
             
-            -- Dispara os remotes APENAS quando estiver parado no alvo
-            fRem("AttemptDeliveryComplete")
-            fRem("AttemptDeliveryPickup")
-            
-            -- REGRA DE OURO: Parar na hora SÓ se o Fill começar a encher (Saiu do 0%)
-            local vis, pct = lerPreenchimentoBarra()
-            if vis and pct > 0 then
-                logMsg("🛑 O Fill começou a encher (" .. math.floor(pct*100) .. "%). Congelando!")
-                
-                local tempoUltimoLog = tick()
-                while t.Parent == ws do
-                    local v, p = lerPreenchimentoBarra()
-                    if not v or p >= 0.99 then break end
-                    if tick() - tempoUltimoLog >= 1.0 then
-                        logMsg("📊 Progresso do Produto: " .. math.floor(p*100) .. "%")
-                        tempoUltimoLog = tick()
-                    end
-                    task.wait(0.1)
+            -- LÓGICA DO ALVO (Coletas/Entregas)
+            if not isPad and anchorRef then
+                if anchorRef.Parent ~= ws then
+                    logMsg("✅ Alvo sumiu! Ação concluída com sucesso.")
+                    return
                 end
-                logMsg("✅ Coleta 100% concluída!")
-                break
+                
+                -- Se a distância ao centro do alvo for menor que 8, começa a testar coleta
+                local distToTarget = (rt.Position * Vector3.new(1,0,1) - targetPos * Vector3.new(1,0,1)).Magnitude
+                if distToTarget <= 8 then
+                    fRem("AttemptDeliveryComplete")
+                    fRem("AttemptDeliveryPickup")
+                    
+                    -- TRAVA SUPREMA
+                    local vis, pct = lerPreenchimentoBarra()
+                    if vis and pct > 0 then
+                        logMsg("🛑 Zona de Coleta alcançada! Fill em " .. math.floor(pct*100) .. "%. Congelando no waypoint!")
+                        rt.Velocity = Vector3.zero
+                        hum:MoveTo(rt.Position)
+                        
+                        local tempoUltimoLog = tick()
+                        while anchorRef.Parent == ws do
+                            local v, p = lerPreenchimentoBarra()
+                            if not v or p >= 0.99 then break end
+                            if tick() - tempoUltimoLog >= 1.0 then
+                                logMsg("📊 Progresso do Produto: " .. math.floor(p*100) .. "%")
+                                tempoUltimoLog = tick()
+                            end
+                            task.wait(0.1)
+                        end
+                        logMsg("✅ Coleta 100% concluída!")
+                        return
+                    end
+                end
             end
             
-        else
-            -- Se não chegou no centro, continua andando
-            hum:MoveTo(targetPos) 
+            -- SEGUINDO A ROTA NATIVA
+            if wp.Action == Enum.PathWaypointAction.Jump then
+                hum.Jump = true
+            end
+            hum:MoveTo(wp.Position)
+            
+            local moveOut = 0
+            while moveOut < 40 do
+                c, rt, hum = getChar()
+                if not (rt and hum) then break end
+                local distWp = (rt.Position * Vector3.new(1,0,1) - wp.Position * Vector3.new(1,0,1)).Magnitude
+                if distWp <= 3.5 then break end -- Chegou no pontinho, vai pro próximo
+                moveOut = moveOut + 1
+                task.wait(0.1)
+            end
         end
         
-        timeOut = timeOut + 1
-        task.wait(0.1)
+        -- Chegou no final de todos os waypoints, firma o pé no centro
+        c, rt, hum = getChar()
+        if hum and rt then
+            rt.Velocity = Vector3.zero
+            hum:MoveTo(rt.Position)
+        end
+        
+    else
+        logMsg("⚠️ Pathfinder falhou. Rota direta (Fallback)...")
+        local timeOut = 0
+        while timeOut < 150 do 
+            c, rt, hum = getChar()
+            if not (rt and hum) then break end
+            
+            if not isPad and anchorRef then
+                if anchorRef.Parent ~= ws then return end
+                
+                local distToTarget = (rt.Position * Vector3.new(1,0,1) - targetPos * Vector3.new(1,0,1)).Magnitude
+                if distToTarget <= 6 then
+                    fRem("AttemptDeliveryComplete")
+                    fRem("AttemptDeliveryPickup")
+                    
+                    local vis, pct = lerPreenchimentoBarra()
+                    if vis and pct > 0 then
+                        rt.Velocity = Vector3.zero
+                        hum:MoveTo(rt.Position)
+                        while anchorRef.Parent == ws do
+                            local v, p = lerPreenchimentoBarra()
+                            if not v or p >= 0.99 then break end
+                            task.wait(0.1)
+                        end
+                        return
+                    end
+                end
+            end
+            
+            local distAtual = (rt.Position * Vector3.new(1,0,1) - targetPos * Vector3.new(1,0,1)).Magnitude
+            if distAtual <= 3.5 then 
+                hum:MoveTo(rt.Position)
+                break 
+            else
+                hum:MoveTo(targetPos)
+            end
+            
+            timeOut = timeOut + 1
+            task.wait(0.1)
+        end
     end
 end
 
@@ -263,7 +286,6 @@ getgenv().DeliveryLoop = task.spawn(function()
     while task.wait(0.2) do
         if not getgenv().AutoFarmDelivery then break end
         
-        -- Bypass imediato se a âncora já existir no mapa
         if ws:FindFirstChild("DeliveryTargetAnchor") then
             getgenv().JobPhase = "Farming"
         end
@@ -283,12 +305,13 @@ getgenv().DeliveryLoop = task.spawn(function()
                 local dist = rt and (rt.Position * Vector3.new(1,0,1) - padPos * Vector3.new(1,0,1)).Magnitude or 999
                 
                 if dist > 6 then
-                    logMsg("🚶 Caminhando para o pad...")
-                    CaminharPad(padPos)
+                    logMsg("🚶 Desenhando rota para o Pad...")
+                    NavegarComPathfinder(padPos, true, nil)
                 end
                 
                 logMsg("📍 No Pad! Iniciando trabalho e pulando pra rota...")
-                if hum then hum:MoveTo(rt.Position) end
+                c, rt, hum = getChar()
+                if hum and rt then hum:MoveTo(rt.Position) end
                 
                 fRem("RequestStartJobSession", "Delivery", "jobPad", mode)
                 task.wait(0.5)
@@ -304,9 +327,9 @@ getgenv().DeliveryLoop = task.spawn(function()
             if t and t.Parent == ws then
                 if t ~= getgenv().LastAnchor then
                     
-                    ProcessarAlvo(t)
-                    getgenv().LastAnchor = t
+                    NavegarComPathfinder(t.Position, false, t)
                     
+                    getgenv().LastAnchor = t
                     local tempoCasa = math.random(30, 50) / 10
                     logMsg("📦 Partindo para o próximo alvo em " .. tempoCasa .. "s...")
                     task.wait(tempoCasa)
