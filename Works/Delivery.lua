@@ -26,7 +26,7 @@ getgenv().LastAnchor = nil
 local function logMsg(msg)
     if getgenv().LogMsg then getgenv().LogMsg(msg) else print("Delivery: " .. tostring(msg)) end
 end
-logMsg("Motor Completo: Leitura da Barra (0.99) + Espera Correta no Centro + Teleporte Ajustado!")
+logMsg("Motor Completo: Trava de chegada corrigida! O boneco VAI andar até o centro.")
 
 -- =========================================================================
 -- ANTI-AFK & ANTI-SENTADA & NOCLIP
@@ -212,7 +212,6 @@ local function SmartTeleport(targetPos, isDelivery)
                 
                 local startPos
                 if tentativa == 1 then
-                    -- 12 a 18 studs para não travar na parede e forçar o gatilho andando
                     local charOffset = math.random(12, 18)
                     startPos = Vector3.new(targetPos.X + (dir.X * charOffset), targetPos.Y + 3.5, targetPos.Z + (dir.Z * charOffset))
                 else
@@ -234,6 +233,9 @@ local function SmartTeleport(targetPos, isDelivery)
                 tempFloor.Position = Vector3.new(targetPos.X, targetPos.Y - 1.5, targetPos.Z)
                 tempFloor.Parent = ws
                 
+                -- O chão agora dura 10 segundos, garantindo que o boneco não caia enquanto caminha
+                game:GetService("Debris"):AddItem(tempFloor, 10)
+                
                 rt.Velocity = Vector3.zero
                 rt.CFrame = CFrame.new(startPos)
                 hum.PlatformStand = false; hum.Sit = false; hum:ChangeState(Enum.HumanoidStateType.Running)
@@ -243,12 +245,11 @@ local function SmartTeleport(targetPos, isDelivery)
                 local timeOut = 0
                 while timeOut < 4 do
                     if rt.Position.Y - targetPos.Y < -15 then break end
-                    if (rt.Position * Vector3.new(1,0,1) - targetPos * Vector3.new(1,0,1)).Magnitude < 4.5 then
+                    if (rt.Position * Vector3.new(1,0,1) - targetPos * Vector3.new(1,0,1)).Magnitude < 5 then
                         chegouNoDestino = true; break
                     end
                     timeOut = timeOut + task.wait(0.1)
                 end
-                tempFloor:Destroy()
                 if chegouNoDestino then break end
             end
         end
@@ -275,28 +276,37 @@ getgenv().DeliveryLoop = task.spawn(function()
             
             if pad then
                 local padPos = pad.Parent.Position
-                local c, rt = getChar()
+                local c, rt, hum = getChar()
                 local dist = rt and (rt.Position * Vector3.new(1,0,1) - padPos * Vector3.new(1,0,1)).Magnitude or 999
                 
-                local chegouNoCentro = (dist < 30)
+                local isCar = (hum and hum.SeatPart ~= nil)
+                local distMinima = isCar and 25 or 6 -- 6 studs é colar no pad, 25 é pra carro
+                local chegouNoCentro = (dist <= distMinima)
                 
                 if not chegouNoCentro then
                     logMsg("Movendo para o centro da rota (" .. mode .. ")...")
                     SmartTeleport(padPos, false)
                     
-                    -- TRAVA DE CHEGADA: O script AGUARDA você estar perto antes de tentar disparar a coleta
+                    -- TRAVA DE CHEGADA ESTRITA: O script vai insistir até bater a distância mínima
                     local waitLimit = 0
                     repeat
-                        c, rt = getChar()
-                        if rt then
+                        c, rt, hum = getChar()
+                        if rt and hum then
+                            isCar = (hum.SeatPart ~= nil)
+                            distMinima = isCar and 25 or 6
                             dist = (rt.Position * Vector3.new(1,0,1) - padPos * Vector3.new(1,0,1)).Magnitude
-                            if dist < 30 then
+                            
+                            if dist <= distMinima then
                                 chegouNoCentro = true
+                            else
+                                if not isCar then
+                                    hum:MoveTo(padPos) -- Força a caminhada caso ele tenha parado
+                                end
                             end
                         end
                         waitLimit = waitLimit + 1
                         task.wait(0.25)
-                    until chegouNoCentro or waitLimit >= 20
+                    until chegouNoCentro or waitLimit >= 30
                 end
 
                 if chegouNoCentro then
