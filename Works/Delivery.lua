@@ -12,7 +12,7 @@ local function logMsg(msg)
     if getgenv().LogMsg then getgenv().LogMsg(msg) else print("Delivery: " .. tostring(msg)) end
 end
 
-logMsg("Motor V19: Teleporte direto REMOVIDO! Caminhada ativada para TUDO (Pad e Casa).")
+logMsg("Motor V21: Barra lida SOMENTE nas entregas/coletas. Pad livre de barra!")
 task.wait(6)
 
 pcall(function() ws.FallenPartsDestroyHeight = -50000 end)
@@ -85,9 +85,7 @@ getgenv().NoclipLoop = game:GetService("RunService").Stepped:Connect(function()
             local car = hum.SeatPart:FindFirstAncestorWhichIsA("Model")
             if car and car ~= c then
                 for _, p in pairs(car:GetDescendants()) do
-                    if p:IsA("BasePart") then
-                        p.CanCollide = false
-                    end
+                    if p:IsA("BasePart") then p.CanCollide = false end
                 end
             end
         end
@@ -107,25 +105,69 @@ local function getChar()
 end
 
 -- =========================================================================
--- LEITURA DO FILL CORRIGIDA (DIRETA E SEM ERROS)
+-- LEITURA DO FILL
 -- =========================================================================
 local function lerPreenchimentoBarra()
     local c = lp.Character
-    if not c then return 0 end
+    if not c then return false, 0 end
     local head = c:FindFirstChild("Head")
-    if not head then return 0 end
+    if not head then return false, 0 end
     local bbg = head:FindFirstChild("CharacterBillboard")
-    if not bbg then return 0 end
+    if not bbg then return false, 0 end
     
-    local fill = bbg:FindFirstChild("Fill", true)
-    if fill and fill:IsA("Frame") then
-        return fill.Size.X.Scale
+    local packageBar = bbg:FindFirstChild("PackageBarFrame", true)
+    if packageBar and packageBar.Visible then
+        local fill = packageBar:FindFirstChild("Fill", true)
+        if fill and fill:IsA("Frame") then
+            return true, fill.Size.X.Scale
+        end
+        return true, 0
     end
-    return 0
+    return false, 0
 end
 
 -- =========================================================================
--- TELEPORTE + CAMINHADA (PARA PAD E CASA IGUAL)
+-- FUNÇÃO UNIVERSAL DE ESPERAR COLETA (SOMENTE PARA A ROTA)
+-- =========================================================================
+local function AguardarColeta()
+    local isVis = false
+    local pct = 0
+    local checkTimer = tick()
+    
+    -- Dá 3 segundos pro jogo renderizar a barra de coleta/entrega
+    while tick() - checkTimer < 3 do
+        isVis, pct = lerPreenchimentoBarra()
+        if isVis then break end
+        task.wait(0.2)
+    end
+    
+    if isVis then
+        logMsg("⏳ Barra detectada! Realizando ação...")
+        local startTime = tick()
+        local tempoUltimoLog = 0
+        
+        while tick() - startTime < 25 do
+            local vis, p = lerPreenchimentoBarra()
+            local perc = math.floor(p * 100)
+            
+            if tick() - tempoUltimoLog >= 1.0 then
+                logMsg("📊 Progresso: " .. perc .. "%")
+                tempoUltimoLog = tick()
+            end
+            
+            if p >= 0.99 or not vis then
+                logMsg("✅ Ação 100% concluída!")
+                break
+            end
+            task.wait(0.1)
+        end
+    else
+        logMsg("⚠️ Nenhuma barra apareceu neste local, prosseguindo...")
+    end
+end
+
+-- =========================================================================
+-- CAMINHADA OBRIGATÓRIA (FIM DO TELEPORTE DIRETO)
 -- =========================================================================
 local function SmartTeleport(targetPos)
     local c, rt, hum = getChar()
@@ -136,7 +178,6 @@ local function SmartTeleport(targetPos)
     local dir = Vector3.new(1, 0, 0)
     if (flatCurrent - flatTarget).Magnitude > 1 then dir = (flatCurrent - flatTarget).Unit end
     
-    -- Cai a ~40 studs de distância
     local charOffset = math.random(35, 45)
     local startPos = Vector3.new(targetPos.X + (dir.X * charOffset), targetPos.Y + 3.5, targetPos.Z + (dir.Z * charOffset))
     
@@ -152,7 +193,6 @@ local function SmartTeleport(targetPos)
     hum.PlatformStand = false; hum.Sit = false; hum:ChangeState(Enum.HumanoidStateType.Running)
     task.wait(0.2)
     
-    -- Caminha a pé até o centro
     hum:MoveTo(targetPos)
     local timeOut = 0
     while timeOut < 100 do 
@@ -164,7 +204,7 @@ local function SmartTeleport(targetPos)
 end
 
 -- =========================================================================
--- LOOP DA ENTREGA
+-- LOOP PRINCIPAL DO FARM
 -- =========================================================================
 getgenv().DeliveryLoop = task.spawn(function()
     while task.wait(0.2) do
@@ -201,36 +241,13 @@ getgenv().DeliveryLoop = task.spawn(function()
                 end
 
                 if chegouNoCentro then
-                    logMsg("📍 Chegou no Pad! Iniciando trabalho...")
-                    -- TRAVA TOTAL DO BONECO: Se mexer, o jogo zera a bolsa.
-                    if hum then hum:MoveTo(rt.Position) end 
+                    logMsg("📍 Chegou no Pad! Acionando painel de trabalho...")
+                    if hum then hum:MoveTo(rt.Position) end
                     
+                    -- Apenas dispara os eventos do Pad e vaza! Zero barra aqui.
                     fRem("RequestStartJobSession", "Delivery", "jobPad", mode)
-                    task.wait(0.5)
-                    fRem("AttemptDeliveryPickup")
+                    task.wait(1.5)
                     
-                    local startTime = tick()
-                    local maxEspera = 25
-                    local tempoUltimoLog = 0
-                    
-                    while tick() - startTime < maxEspera do
-                        local preenchimento = lerPreenchimentoBarra()
-                        local porcentagem = math.floor(preenchimento * 100)
-                        
-                        if tick() - tempoUltimoLog >= 1.0 then
-                            logMsg("📊 Progresso real: " .. porcentagem .. "%")
-                            tempoUltimoLog = tick()
-                        end
-
-                        if preenchimento >= 0.99 then
-                            logMsg("✅ Bolsa 100% cheia! Preparando viagem...")
-                            break
-                        end
-                        task.wait(0.1)
-                    end
-                    
-                    local delaySeguranca = math.random(10, 30) / 10
-                    task.wait(delaySeguranca)
                     getgenv().JobPhase = "Farming"
                 else
                     task.wait(1)
@@ -243,30 +260,38 @@ getgenv().DeliveryLoop = task.spawn(function()
             local t = ws:FindFirstChild("DeliveryTargetAnchor")
             if t and t.Parent == ws then
                 if t ~= getgenv().LastAnchor then
-                    local c, rt = getChar()
+                    local c, rt, hum = getChar()
                     local dist = rt and (rt.Position * Vector3.new(1,0,1) - t.Position * Vector3.new(1,0,1)).Magnitude or 999
                     
                     if dist > 55 then
-                        logMsg("🚶 Caminhando de longe até a casa para evitar rubberband...")
-                        -- AQUI ESTAVA O SEU MAIOR PROBLEMA. AGORA ELE CAMINHA ATÉ A CASA TAMBÉM!
+                        logMsg("🚶 Caminhando até o destino de coleta/entrega...")
                         SmartTeleport(t.Position) 
                         task.wait(0.5)
                     end
                     
-                    c, rt = getChar()
+                    c, rt, hum = getChar()
                     dist = rt and (rt.Position * Vector3.new(1,0,1) - t.Position * Vector3.new(1,0,1)).Magnitude or 999
                     
                     if dist < 85 then
+                        -- Pisa exatamente na marcação
+                        if hum then hum:MoveTo(t.Position) end
+                        
+                        -- LÊ A BARRA DE PROCESSO AQUI!
+                        AguardarColeta()
+                        
+                        -- Confirma pros remotes do jogo que terminamos a ação
                         fRem("AttemptDeliveryComplete")
                         task.wait(0.2)
-                        fRem("AttemptDeliveryComplete")
-                        task.wait(0.3)
                         fRem("AttemptDeliveryPickup")
+                        
                         getgenv().LastAnchor = t
-                        task.wait(math.random(50, 70) / 10)
+                        local tempoCasa = math.random(30, 50) / 10
+                        logMsg("📦 Partindo para a próxima em " .. tempoCasa .. "s...")
+                        task.wait(tempoCasa)
+                        
                         task.spawn(function() task.wait(1.5); if getgenv().LastAnchor == t then getgenv().LastAnchor = nil end end)
                     else
-                        logMsg("⏳ Ajustando posição final na casa... Distância: " .. math.floor(dist))
+                        logMsg("⏳ Ajustando posição no destino... Distância: " .. math.floor(dist))
                         task.wait(1)
                     end
                 end
