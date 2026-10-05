@@ -4,6 +4,13 @@ local players = game:GetService("Players")
 local lp = players.LocalPlayer
 local remotes = rs:WaitForChild("Remotes")
 
+-- =========================================================================
+-- IMUNIDADE AO VOID (Desativa a morte por queda do próprio Roblox)
+-- =========================================================================
+pcall(function()
+    ws.FallenPartsDestroyHeight = -50000
+end)
+
 if getgenv().DeliveryLoop then
     pcall(task.cancel, getgenv().DeliveryLoop)
 end
@@ -18,6 +25,9 @@ if getgenv().AntiAfkConnection then
 end
 if getgenv().AntiAfkLoop then
     pcall(task.cancel, getgenv().AntiAfkLoop)
+end
+if getgenv().AntiVoidLoop then
+    getgenv().AntiVoidLoop:Disconnect()
 end
 
 getgenv().AutoFarmDelivery = true
@@ -43,7 +53,6 @@ logMsg("Anti-Fling & Anti-Sit Engine loaded. Waiting for events...")
 local vu = game:GetService("VirtualUser")
 local vim = game:GetService("VirtualInputManager")
 
--- 1. Interceção de Emergência (Gatilho do Roblox de 20 min)
 getgenv().AntiAfkConnection = lp.Idled:Connect(function()
     if getgenv().AutoFarmDelivery then
         vu:CaptureController()
@@ -52,11 +61,9 @@ getgenv().AntiAfkConnection = lp.Idled:Connect(function()
     end
 end)
 
--- 2. Prevenção Ativa (A cada 8 minutos para burlar o Servidor AFK do Driving Empire)
 getgenv().AntiAfkLoop = task.spawn(function()
     while task.wait(480) do
         if getgenv().AutoFarmDelivery then
-            -- Simula o pressionar e soltar da tecla F15 (Não afeta nada no jogo)
             vim:SendKeyEvent(true, Enum.KeyCode.F15, false, game)
             task.wait(0.1)
             vim:SendKeyEvent(false, Enum.KeyCode.F15, false, game)
@@ -66,7 +73,7 @@ getgenv().AntiAfkLoop = task.spawn(function()
 end)
 
 -- =========================================================================
--- SISTEMA ANTI-SENTADA E ANTI-TRAVA (EMERGÊNCIA)
+-- SISTEMA ANTI-SENTADA SEM RESET DE VIDA
 -- =========================================================================
 local stuckTick = 0
 getgenv().AntiSeatLoop = game:GetService("RunService").Heartbeat:Connect(function()
@@ -85,16 +92,19 @@ getgenv().AntiSeatLoop = game:GetService("RunService").Heartbeat:Connect(functio
                 end
 
                 if not isDrivingCar then
+                    if seatPart then
+                        local weld = seatPart:FindFirstChild("SeatWeld")
+                        if weld then weld:Destroy() end
+                    end
+                    
                     hum.Sit = false
                     hum.Jump = true
-                    hum:ChangeState(Enum.HumanoidStateType.Running)
-                    
-                    rt.CFrame = rt.CFrame + Vector3.new(0, 5, 0)
                     
                     stuckTick = stuckTick + 1
-                    if stuckTick > 60 then
-                        logMsg("WARNING: Character stuck sitting! Forcing emergency reset...")
-                        hum.Health = 0
+                    if stuckTick > 120 then
+                        logMsg("⚠️ Personagem preso! Forçando teleporte vertical para soltar...")
+                        rt.CFrame = rt.CFrame + Vector3.new(0, 15, 0)
+                        hum:ChangeState(Enum.HumanoidStateType.Running)
                         stuckTick = 0
                     end
                 else
@@ -190,7 +200,7 @@ local function SmartTeleport(targetPos, isDelivery)
         end
 
         local carOffset = math.random(85, 100)
-        local startPos = Vector3.new(targetPos.X + (dir.X * carOffset), targetPos.Y + 5, targetPos.Z + (dir.Z * carOffset))
+        local startPos = Vector3.new(targetPos.X + (dir.X * carOffset), targetPos.Y + 10, targetPos.Z + (dir.Z * carOffset))
         local lookAt = Vector3.new(targetPos.X, startPos.Y, targetPos.Z)
         local destCFrame = CFrame.new(startPos, lookAt)
 
