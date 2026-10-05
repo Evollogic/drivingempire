@@ -2,7 +2,6 @@ local plyrs = game:GetService("Players")
 local lp = plyrs.LocalPlayer
 local rs = game:GetService("RunService")
 
--- Garante que a UI vai aparecer na tela do jogador, ignorando bloqueios de CoreGui
 local uiParent = lp:WaitForChild("PlayerGui")
 
 for _, v in pairs(uiParent:GetChildren()) do
@@ -17,7 +16,7 @@ local allLogs = {}
 
 local mainFrame = Instance.new("Frame", sg)
 mainFrame.Size = UDim2.new(0, 200, 0, 140)
-mainFrame.Position = UDim2.new(0.5, -350, 0.5, -50)
+mainFrame.Position = UDim2.new(0.5, -450, 0.5, -50)
 mainFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 25)
 mainFrame.Active = true
 mainFrame.Draggable = true
@@ -27,7 +26,7 @@ Instance.new("UIStroke", mainFrame).Color = Color3.fromRGB(0, 255, 255)
 local title = Instance.new("TextLabel", mainFrame)
 title.Size = UDim2.new(1, 0, 0, 30)
 title.BackgroundTransparency = 1
-title.Text = "3D Telemetry Monitor"
+title.Text = "3D Monitor Bruto"
 title.TextColor3 = Color3.fromRGB(255, 255, 255)
 title.Font = Enum.Font.GothamBold
 title.TextSize = 14
@@ -53,8 +52,8 @@ logToggleBtn.TextSize = 12
 Instance.new("UICorner", logToggleBtn).CornerRadius = UDim.new(0, 6)
 
 local termFrame = Instance.new("Frame", sg)
-termFrame.Size = UDim2.new(0, 400, 0, 350)
-termFrame.Position = UDim2.new(0.5, -120, 0.5, -50)
+termFrame.Size = UDim2.new(0, 500, 0, 400)
+termFrame.Position = UDim2.new(0.5, -200, 0.5, -100)
 termFrame.BackgroundColor3 = Color3.fromRGB(15, 15, 18)
 termFrame.Visible = true
 termFrame.Active = true
@@ -72,7 +71,7 @@ local termTitle = Instance.new("TextLabel", termTop)
 termTitle.Size = UDim2.new(0.5, 0, 1, 0)
 termTitle.Position = UDim2.new(0, 10, 0, 0)
 termTitle.BackgroundTransparency = 1
-termTitle.Text = "📟 Live Telemetry Logs"
+termTitle.Text = "📟 Logs de Força Bruta"
 termTitle.TextColor3 = Color3.fromRGB(100, 255, 100)
 termTitle.Font = Enum.Font.GothamBold
 termTitle.TextSize = 14
@@ -124,7 +123,7 @@ local function logMsg(msg)
     termScroll.CanvasPosition = Vector2.new(0, termScroll.AbsoluteWindowSize.Y + 9999)
 end
 
-logMsg("Monitor Ultra-Detalhado Carregado (Correcao de Sintaxe).")
+logMsg("Monitor V3: Modo Força Bruta Ativado (Spamming liberado)")
 
 termCopyBtn.MouseButton1Click:Connect(function()
     if setclipboard then
@@ -154,49 +153,39 @@ termCloseBtn.MouseButton1Click:Connect(function()
     logToggleBtn.Text = "SHOW LOGS"
 end)
 
--- =========================================================================
--- MONITORAMENTO ULTRA-DETALHADO DE DESCENDENTES DA CABEÇA
--- =========================================================================
 local isMonitoring = false
 local monitorLoop = nil
-local lastValues = {}
 
-local function scanHeadDeep()
+-- Função de varredura bruta (Cuspir tudo sem filtro)
+local function scanBruteForce()
     local char = lp.Character
-    if not char then return end
+    if not char then logMsg("⏳ Aguardando Character...") return end
+    
     local head = char:FindFirstChild("Head")
     if not head then return end
-
+    
     local bbg = head:FindFirstChild("CharacterBillboard")
-    if not bbg then
-        logMsg("⚠️ Billboard não encontrado.")
-        return
+    if not bbg then 
+        logMsg("⚠️ CharacterBillboard NÃO ESTÁ na cabeça no momento.") 
+        return 
     end
-
+    
+    logMsg("--- 🔍 VARREDURA DO BILLBOARD ---")
+    local itensEncontrados = 0
+    
     for _, desc in pairs(bbg:GetDescendants()) do
-        if desc:IsA("Frame") or desc:IsA("ImageLabel") or desc:IsA("TextLabel") then
-            local pathName = desc.Name
-            local parentName = desc.Parent and desc.Parent.Name or "Unknown"
-            local key = parentName .. "." .. pathName
-            
-            if desc:IsA("GuiObject") then
-                local scaleX = string.format("%.3f", desc.Size.X.Scale)
-                local scaleY = string.format("%.3f", desc.Size.Y.Scale)
-                -- CORREÇÃO APLICADA AQUI (string.Format removido)
-                local info = "Scale(X: " .. scaleX .. ", Y: " .. scaleY .. ") Vis: " .. tostring(desc.Visible)
-                
-                if lastValues[key] ~= info then
-                    logMsg("🔍 [" .. key .. "] " .. info)
-                    lastValues[key] = info
-                end
-            elseif desc:IsA("TextLabel") then
-                local txtInfo = "Text: " .. desc.Text
-                if lastValues[key] ~= txtInfo then
-                    logMsg("💬 [" .. key .. "] " .. txtInfo)
-                    lastValues[key] = txtInfo
-                end
-            end
+        if desc:IsA("Frame") or desc:IsA("ImageLabel") then
+            -- Exemplo de saida: "🔳 FillBar | {0.5, 0}, {1, 0} | Vis: true"
+            logMsg("🔳 " .. desc.Name .. " | " .. tostring(desc.Size) .. " | Vis: " .. tostring(desc.Visible))
+            itensEncontrados = itensEncontrados + 1
+        elseif desc:IsA("TextLabel") then
+            logMsg("💬 " .. desc.Name .. " | Texto: " .. desc.Text)
+            itensEncontrados = itensEncontrados + 1
         end
+    end
+    
+    if itensEncontrados == 0 then
+        logMsg("⚠️ O Billboard foi encontrado, mas está totalmente VAZIO!")
     end
 end
 
@@ -206,12 +195,12 @@ monitorBtn.MouseButton1Click:Connect(function()
     if isMonitoring then
         monitorBtn.Text = "STOP MONITOR"
         monitorBtn.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
-        logMsg("🟢 Monitoramento Profundo Ativo! Gravando alterações na cabeça...")
+        logMsg("🟢 MODO FORÇA BRUTA LIGADO! Varrendo a cada 1.5s...")
         
         monitorLoop = task.spawn(function()
             while isMonitoring do
-                scanHeadDeep()
-                task.wait(0.1)
+                scanBruteForce()
+                task.wait(1.5)
             end
         end)
     else
