@@ -26,7 +26,7 @@ getgenv().LastAnchor = nil
 local function logMsg(msg)
     if getgenv().LogMsg then getgenv().LogMsg(msg) else print("Delivery: " .. tostring(msg)) end
 end
-logMsg("Motor Corrigido: Offset de 15 studs no teleporte a pé para forçar o gatilho do jogo!")
+logMsg("Motor Completo: Leitura da Barra (0.99) + Espera Correta no Centro + Teleporte Ajustado!")
 
 -- =========================================================================
 -- ANTI-AFK & ANTI-SENTADA & NOCLIP
@@ -212,8 +212,7 @@ local function SmartTeleport(targetPos, isDelivery)
                 
                 local startPos
                 if tentativa == 1 then
-                    -- DISTÂNCIA AJUSTADA: 12 a 18 studs. Próximo o suficiente para não prender em paredes, 
-                    -- mas longe o suficiente para forçar o boneco a andar e ativar o gatilho (hitbox) do pad.
+                    -- 12 a 18 studs para não travar na parede e forçar o gatilho andando
                     local charOffset = math.random(12, 18)
                     startPos = Vector3.new(targetPos.X + (dir.X * charOffset), targetPos.Y + 3.5, targetPos.Z + (dir.Z * charOffset))
                 else
@@ -244,7 +243,6 @@ local function SmartTeleport(targetPos, isDelivery)
                 local timeOut = 0
                 while timeOut < 4 do
                     if rt.Position.Y - targetPos.Y < -15 then break end
-                    -- Aceitamos que ele chegou se bater menos de 4.5 de distância
                     if (rt.Position * Vector3.new(1,0,1) - targetPos * Vector3.new(1,0,1)).Magnitude < 4.5 then
                         chegouNoDestino = true; break
                     end
@@ -286,16 +284,19 @@ getgenv().DeliveryLoop = task.spawn(function()
                     logMsg("Movendo para o centro da rota (" .. mode .. ")...")
                     SmartTeleport(padPos, false)
                     
+                    -- TRAVA DE CHEGADA: O script AGUARDA você estar perto antes de tentar disparar a coleta
                     local waitLimit = 0
-                    while waitLimit < 20 do
+                    repeat
                         c, rt = getChar()
-                        if rt and (rt.Position * Vector3.new(1,0,1) - padPos * Vector3.new(1,0,1)).Magnitude < 30 then
-                            chegouNoCentro = true
-                            break
+                        if rt then
+                            dist = (rt.Position * Vector3.new(1,0,1) - padPos * Vector3.new(1,0,1)).Magnitude
+                            if dist < 30 then
+                                chegouNoCentro = true
+                            end
                         end
                         waitLimit = waitLimit + 1
                         task.wait(0.25)
-                    end
+                    until chegouNoCentro or waitLimit >= 20
                 end
 
                 if chegouNoCentro then
@@ -316,7 +317,7 @@ getgenv().DeliveryLoop = task.spawn(function()
                     end
                     
                     local delaySeguranca = math.random(10, 30) / 10
-                    logMsg("⏱️️ Aguardando " .. delaySeguranca .. "s extras para confirmar a carga...")
+                    logMsg("⏱️ Aguardando " .. delaySeguranca .. "s extras para confirmar a carga...")
                     task.wait(delaySeguranca)
                     
                     getgenv().JobPhase = "Farming"
