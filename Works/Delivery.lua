@@ -45,10 +45,10 @@ local function logMsg(msg)
     end
 end
 
-logMsg("Anti-Fling & Anti-Sit Engine loaded. Waiting for events...")
+logMsg("Motor Corrigido: Colisão do chão mantida, sem paraquedas!")
 
 -- =========================================================================
--- SISTEMA ANTI-AFK SUPREMO (BURLA O ROBLOX E O JOGO)
+-- SISTEMA ANTI-AFK SUPREMO
 -- =========================================================================
 local vu = game:GetService("VirtualUser")
 local vim = game:GetService("VirtualInputManager")
@@ -98,12 +98,11 @@ getgenv().AntiSeatLoop = game:GetService("RunService").Heartbeat:Connect(functio
                     end
                     
                     hum.Sit = false
-                    hum.Jump = true
                     
                     stuckTick = stuckTick + 1
                     if stuckTick > 120 then
                         logMsg("⚠️ Personagem preso! Forçando teleporte vertical para soltar...")
-                        rt.CFrame = rt.CFrame + Vector3.new(0, 15, 0)
+                        rt.CFrame = rt.CFrame + Vector3.new(0, 5, 0)
                         hum:ChangeState(Enum.HumanoidStateType.Running)
                         stuckTick = 0
                     end
@@ -118,23 +117,24 @@ getgenv().AntiSeatLoop = game:GetService("RunService").Heartbeat:Connect(functio
 end)
 
 -- =========================================================================
--- SISTEMA NOCLIP CONTÍNUO (GHOST MODE AGRESSIVO)
+-- SISTEMA NOCLIP SEGURO (MANTÉM COLISÃO NO CHÃO)
 -- =========================================================================
 getgenv().NoclipLoop = game:GetService("RunService").Stepped:Connect(function()
     if not getgenv().AutoFarmDelivery then return end
     local c = lp.Character
     if c then
-        -- Desativa a colisão de tudo no boneco (atravessa cercas) exceto pernas e pés para andar
-        for _, p in pairs(c:GetDescendants()) do
+        -- Apenas o Tronco e a Cabeça perdem colisão para não travar em cercas.
+        -- HumanoidRootPart, Pernas e Pés MANTÊM colisão para você não cair do mapa.
+        for _, p in pairs(c:GetChildren()) do
             if p:IsA("BasePart") then
-                local n = p.Name:lower()
-                if not (n:match("leg") or n:match("foot")) then
+                local n = p.Name
+                if n ~= "HumanoidRootPart" and not n:match("Leg") and not n:match("Foot") then
                     p.CanCollide = false
                 end
             end
         end
         
-        -- Mantém a colisão do carro desligada o tempo todo, burlando o reset do jogo
+        -- Noclip do carro mantido nas partes de cima
         local hum = c:FindFirstChildOfClass("Humanoid")
         if hum and hum.SeatPart then
             local car = hum.SeatPart:FindFirstAncestorWhichIsA("Model")
@@ -224,13 +224,6 @@ local function SmartTeleport(targetPos, isDelivery)
         local lookAt = Vector3.new(targetPos.X, startPos.Y, targetPos.Z)
         local destCFrame = CFrame.new(startPos, lookAt)
 
-        for _, p in pairs(allVehicleParts) do
-            local n = p.Name:lower()
-            if not (n:match("wheel") or n:match("tire") or n:match("rim") or n:match("suspension") or n:match("whl")) then
-                p.CanCollide = false
-            end
-        end
-
         for i = 1, 15 do
             car:PivotTo(destCFrame)
             for _, p in pairs(allVehicleParts) do
@@ -246,13 +239,6 @@ local function SmartTeleport(targetPos, isDelivery)
 
         local timeOut = 0
         while timeOut < 6 do
-            for _, p in pairs(allVehicleParts) do
-                local n = p.Name:lower()
-                if not (n:match("wheel") or n:match("tire") or n:match("rim") or n:match("suspension") or n:match("whl")) then
-                    p.CanCollide = false
-                end
-            end
-
             local currentDist = (cPart.Position * Vector3.new(1,0,1) - targetPos * Vector3.new(1,0,1)).Magnitude
             if currentDist < 15 then
                 break
@@ -269,26 +255,18 @@ local function SmartTeleport(targetPos, isDelivery)
     else
         if rt and hum then
             local charOffset = math.random(35, 45)
-            local startPos = Vector3.new(targetPos.X + charOffset, targetPos.Y + 3.5, targetPos.Z)
-
-            local tempFloor = Instance.new("Part")
-            tempFloor.Name = "DeliveryGhostFloor"
-            tempFloor.Anchored = true
-            tempFloor.CanCollide = true
-            tempFloor.Transparency = 1
-            tempFloor.Size = Vector3.new(200, 2, 200)
-            tempFloor.Position = Vector3.new(targetPos.X, targetPos.Y - 1, targetPos.Z)
-            tempFloor.Parent = ws
+            -- Removemos a altura extra e colocamos exatamente na mesma altura do target
+            local startPos = Vector3.new(targetPos.X + charOffset, targetPos.Y + 1, targetPos.Z)
 
             rt.Velocity = Vector3.zero
             rt.CFrame = CFrame.new(startPos)
             hum.PlatformStand = false
             hum.Sit = false
-            hum.Jump = true
-            hum:ChangeState(Enum.HumanoidStateType.Freefall)
-
-            task.wait(0.2)
+            
+            -- REMOVIDO o Freefall e o Jump para evitar acionar o paraquedas!
             hum:ChangeState(Enum.HumanoidStateType.Running)
+            
+            task.wait(0.2)
             hum:MoveTo(targetPos)
 
             local timeOut = 0
@@ -299,7 +277,6 @@ local function SmartTeleport(targetPos, isDelivery)
                 timeOut = timeOut + task.wait(0.1)
             end
             
-            tempFloor:Destroy()
             logMsg("--- END TELEPORT (ON FOOT) ---")
         end
     end
