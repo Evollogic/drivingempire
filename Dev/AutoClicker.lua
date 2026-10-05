@@ -1,15 +1,17 @@
-local coreGui = game:GetService("CoreGui")
 local plyrs = game:GetService("Players")
 local lp = plyrs.LocalPlayer
 local rs = game:GetService("RunService")
 
-for _, v in pairs(coreGui:GetChildren()) do
+-- Garante que a UI vai aparecer na tela do jogador, ignorando bloqueios de CoreGui
+local uiParent = lp:WaitForChild("PlayerGui")
+
+for _, v in pairs(uiParent:GetChildren()) do
     if v.Name == "DevClickerUI" then v:Destroy() end
 end
 
 local sg = Instance.new("ScreenGui")
 sg.Name = "DevClickerUI"
-sg.Parent = coreGui
+sg.Parent = uiParent
 
 local allLogs = {}
 
@@ -122,7 +124,7 @@ local function logMsg(msg)
     termScroll.CanvasPosition = Vector2.new(0, termScroll.AbsoluteWindowSize.Y + 9999)
 end
 
-logMsg("Monitor Ultra-Detalhado Carregado.")
+logMsg("Monitor Ultra-Detalhado Carregado (Correcao de Sintaxe).")
 
 termCopyBtn.MouseButton1Click:Connect(function()
     if setclipboard then
@@ -171,7 +173,6 @@ local function scanHeadDeep()
         return
     end
 
-    -- Varre absolutamente tudo dentro do Billboard para capturar qualquer alteração de tamanho ou propriedade
     for _, desc in pairs(bbg:GetDescendants()) do
         if desc:IsA("Frame") or desc:IsA("ImageLabel") or desc:IsA("TextLabel") then
             local pathName = desc.Name
@@ -181,7 +182,8 @@ local function scanHeadDeep()
             if desc:IsA("GuiObject") then
                 local scaleX = string.format("%.3f", desc.Size.X.Scale)
                 local scaleY = string.format("%.3f", desc.Size.Y.Scale)
-                local info = string.Format = "Scale(X: " .. scaleX .. ", Y: " .. scaleY .. ") Vis: " .. tostring(desc.Visible)
+                -- CORREÇÃO APLICADA AQUI (string.Format removido)
+                local info = "Scale(X: " .. scaleX .. ", Y: " .. scaleY .. ") Vis: " .. tostring(desc.Visible)
                 
                 if lastValues[key] ~= info then
                     logMsg("🔍 [" .. key .. "] " .. info)
