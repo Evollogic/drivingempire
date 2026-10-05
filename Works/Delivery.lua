@@ -29,7 +29,7 @@ local function logMsg(msg)
     if getgenv().LogMsg then getgenv().LogMsg(msg) else print("Delivery: " .. tostring(msg)) end
 end
 
-logMsg("Motor Corrigido: Radar Raycast Ativado! Checando caminhos antes do spawn.")
+logMsg("Motor Corrigido: Radar Inteligente com Teleporte Cego para Mapas Descarregados.")
 
 -- =========================================================================
 -- ANTI-AFK
@@ -154,7 +154,7 @@ local function simularBotao(nomeBotao, pressionar)
 end
 
 -- =========================================================================
--- FUNÇÃO DE TELEPORTE SMART COM RADAR (RAYCAST)
+-- FUNÇÃO DE TELEPORTE SMART COM RADAR (RAYCAST) E FORCE-LOAD
 -- =========================================================================
 local function SmartTeleport(targetPos, isDelivery)
     logMsg("--- STARTING SMART TELEPORT ---")
@@ -215,22 +215,25 @@ local function SmartTeleport(targetPos, isDelivery)
                     startPos = Vector3.new(targetPos.X + math.cos(angulo) * dist, targetPos.Y + 3.5, targetPos.Z + math.sin(angulo) * dist)
                 end
 
-                -- RADAR (RAYCAST): Checa se tem chão debaixo do ponto escolhido!
+                -- RADAR (RAYCAST): Checa se tem chão debaixo do ponto escolhido
                 local rayParams = RaycastParams.new()
                 rayParams.FilterDescendantsInstances = {c}
                 rayParams.FilterType = Enum.RaycastFilterType.Exclude
                 
-                -- Atira o laser de 50 metros acima da posição para baixo
                 local rayOrigin = Vector3.new(startPos.X, startPos.Y + 50, startPos.Z)
                 local rayDir = Vector3.new(0, -150, 0)
                 local hit = ws:Raycast(rayOrigin, rayDir, rayParams)
 
                 if not hit then
-                    logMsg("❌ Radar detectou buraco invisível (Void)! Recalculando rota " .. tentativa)
-                    continue -- Pula para a próxima tentativa instantaneamente!
+                    if tentativa < maxTentativas then
+                        logMsg("❌ Radar detectou buraco invisível (Void)! Recalculando rota " .. tentativa)
+                        continue 
+                    else
+                        logMsg("⚠️ Bairro não carregou! Forçando teleporte cego com piso gigante para carregar o mapa.")
+                    end
+                else
+                    logMsg("✅ Caminho validado pelo Radar! Iniciando caminhada...")
                 end
-
-                logMsg("✅ Caminho validado pelo Radar! Iniciando caminhada...")
 
                 local tempFloor = Instance.new("Part")
                 tempFloor.Name = "DeliveryGhostFloor"
@@ -329,13 +332,21 @@ getgenv().DeliveryLoop = task.spawn(function()
             if t and t.Parent == ws then
                 if t ~= getgenv().LastAnchor then
                     SmartTeleport(t.Position, true)
-                    fRem("AttemptDeliveryComplete"); task.wait(0.2); fRem("AttemptDeliveryComplete"); task.wait(0.3)
-                    fRem("AttemptDeliveryPickup")
-                    getgenv().LastAnchor = t
-                    local tempoCasa = math.random(50, 70) / 10
-                    logMsg("📦 Delivered! Waiting " .. tempoCasa .. "s before moving to next house...")
-                    task.wait(tempoCasa)
-                    task.spawn(function() task.wait(1.5); if getgenv().LastAnchor == t then getgenv().LastAnchor = nil end end)
+                    
+                    -- Adicionada trava de segurança: só confirma entrega se estiver perto do alvo real
+                    local c, rt = getChar()
+                    if rt and (rt.Position * Vector3.new(1,0,1) - t.Position * Vector3.new(1,0,1)).Magnitude < 30 then
+                        fRem("AttemptDeliveryComplete"); task.wait(0.2); fRem("AttemptDeliveryComplete"); task.wait(0.3)
+                        fRem("AttemptDeliveryPickup")
+                        getgenv().LastAnchor = t
+                        local tempoCasa = math.random(50, 70) / 10
+                        logMsg("📦 Delivered! Waiting " .. tempoCasa .. "s before moving to next house...")
+                        task.wait(tempoCasa)
+                        task.spawn(function() task.wait(1.5); if getgenv().LastAnchor == t then getgenv().LastAnchor = nil end end)
+                    else
+                        logMsg("⏳ Muito longe para entregar! Mapa carregando, tentaremos de novo no próximo loop.")
+                        task.wait(1)
+                    end
                 end
             else
                 task.wait(0.1)
