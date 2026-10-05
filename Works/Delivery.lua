@@ -118,15 +118,35 @@ getgenv().AntiSeatLoop = game:GetService("RunService").Heartbeat:Connect(functio
 end)
 
 -- =========================================================================
--- SISTEMA NOCLIP CONTÍNUO (GHOST MODE)
+-- SISTEMA NOCLIP CONTÍNUO (GHOST MODE AGRESSIVO)
 -- =========================================================================
 getgenv().NoclipLoop = game:GetService("RunService").Stepped:Connect(function()
     if not getgenv().AutoFarmDelivery then return end
     local c = lp.Character
     if c then
-        for _, p in pairs(c:GetChildren()) do
-            if p:IsA("BasePart") and (p.Name == "Torso" or p.Name == "UpperTorso" or p.Name == "LowerTorso" or p.Name == "Head") then
-                p.CanCollide = false
+        -- Desativa a colisão de tudo no boneco (atravessa cercas) exceto pernas e pés para andar
+        for _, p in pairs(c:GetDescendants()) do
+            if p:IsA("BasePart") then
+                local n = p.Name:lower()
+                if not (n:match("leg") or n:match("foot")) then
+                    p.CanCollide = false
+                end
+            end
+        end
+        
+        -- Mantém a colisão do carro desligada o tempo todo, burlando o reset do jogo
+        local hum = c:FindFirstChildOfClass("Humanoid")
+        if hum and hum.SeatPart then
+            local car = hum.SeatPart:FindFirstAncestorWhichIsA("Model")
+            if car and car ~= c then
+                for _, p in pairs(car:GetDescendants()) do
+                    if p:IsA("BasePart") then
+                        local n = p.Name:lower()
+                        if not (n:match("wheel") or n:match("tire") or n:match("rim") or n:match("suspension") or n:match("whl")) then
+                            p.CanCollide = false
+                        end
+                    end
+                end
             end
         end
     end
@@ -245,12 +265,9 @@ local function SmartTeleport(targetPos, isDelivery)
         task.wait(0.8)
         simularBotao("Brake", false)
 
-        -- A RESTAURAÇÃO DE COLISÃO FOI REMOVIDA DAQUI! O carro não vai travar mais.
-
         logMsg("--- END TELEPORT (VEHICLE) ---")
     else
         if rt and hum then
-            -- BONECO VOLTA A CAMINHAR EXATAMENTE COMO ESTAVA ANTES!
             local charOffset = math.random(35, 45)
             local startPos = Vector3.new(targetPos.X + charOffset, targetPos.Y + 3.5, targetPos.Z)
 
