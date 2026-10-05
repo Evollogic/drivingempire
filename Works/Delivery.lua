@@ -10,7 +10,7 @@ repeat task.wait(0.5) until game:IsLoaded()
 repeat task.wait(0.5) until lp.Character and lp.Character:FindFirstChild("HumanoidRootPart")
 
 local function logMsg(msg)
-    local prefix = "[V33-DEBUG] "
+    local prefix = "[V34-DEBUG] "
     if getgenv().LogMsg then
         getgenv().LogMsg(prefix .. msg)
     else
@@ -18,7 +18,7 @@ local function logMsg(msg)
     end
 end
 
-logMsg("Iniciando Motor V33: Raycast Floor-Finder e Anti-Zero Point...")
+logMsg("Iniciando Motor V34: Raycast Puro (Sem falsos bloqueios)...")
 
 pcall(function() ws.FallenPartsDestroyHeight = -50000 end)
 
@@ -124,31 +124,31 @@ local function NavegarComPathfinder(targetPos, isPad, anchorRef)
     local distInicial = (flatCurrent - flatTarget).Magnitude
 
     if distInicial > 45 then
-        logMsg("Distância alta (" .. math.floor(distInicial) .. "m). Iniciando aproximação com Raycast...")
+        logMsg("Distância alta (" .. math.floor(distInicial) .. "m). Iniciando aterrissagem via Raycast...")
         local dir = (flatCurrent - flatTarget).Unit
         local charOffset = 35
         
-        -- Joga o boneco para 100 blocos de altura acima do destino
+        -- Joga o boneco para 100 blocos de altura
         local skyPos = Vector3.new(targetPos.X + (dir.X * charOffset), targetPos.Y + 100, targetPos.Z + (dir.Z * charOffset))
         
         rt.Velocity = Vector3.zero
         rt.CFrame = CFrame.new(skyPos)
         rt.Anchored = true 
         
-        logMsg("Aguardando mapa renderizar (1.5s)...")
+        logMsg("Aguardando mapa renderizar no ar (1.5s)...")
         task.wait(1.5)
         
-        -- Dispara um laser para baixo para achar o chão real (a calçada visível)
+        -- Dispara um laser para baixo para achar a calçada visível real
         local params = RaycastParams.new()
         params.FilterDescendantsInstances = {c}
         params.FilterType = Enum.RaycastFilterType.Exclude
         local hit = ws:Raycast(rt.Position, Vector3.new(0, -200, 0), params)
         
         if hit then
-            logMsg("Chão real detectado na altura Y: " .. math.floor(hit.Position.Y) .. ". Aterrissando com segurança.")
+            logMsg("Chão real encontrado na altura Y: " .. math.floor(hit.Position.Y) .. "!")
             rt.CFrame = CFrame.new(hit.Position + Vector3.new(0, 4, 0))
         else
-            logMsg("Aviso: Chão não encontrado. Caindo pela gravidade normal.")
+            logMsg("Aviso: Chão não encontrado com Raycast. Mantendo altura.")
         end
 
         rt.Anchored = false
@@ -160,31 +160,25 @@ local function NavegarComPathfinder(targetPos, isPad, anchorRef)
     hum:ChangeState(Enum.HumanoidStateType.Running)
 
     local path = pfs:CreatePath({ AgentRadius = 2, AgentHeight = 5, AgentCanJump = true })
-    
-    local success, err = pcall(function()
-        path:ComputeAsync(rt.Position, targetPos)
-    end)
+    local success, err = pcall(function() path:ComputeAsync(rt.Position, targetPos) end)
 
     if success and path.Status == Enum.PathStatus.Success then
         local waypoints = path:GetWaypoints()
-        
         for i, wp in ipairs(waypoints) do
             c, rt, hum = getChar()
             if not (rt and hum) then return end
             
             if rt.Position.Y < -50 then
-                logMsg("ALERTA: Queda detectada. Abortando rota.")
+                logMsg("ALERTA: Queda pro limbo detectada. Abortando rota.")
                 return
             end
 
             if not isPad and anchorRef then
                 if anchorRef.Parent ~= ws then return end
-                
                 local distToTarget = (rt.Position * Vector3.new(1,0,1) - targetPos * Vector3.new(1,0,1)).Magnitude
                 if distToTarget <= 8 then
                     fRem("AttemptDeliveryComplete")
                     fRem("AttemptDeliveryPickup")
-                    
                     local vis, pct = lerPreenchimentoBarra()
                     if vis and pct > 0 then
                         logMsg("Trava Suprema ativada! Coletando...")
@@ -218,7 +212,7 @@ local function NavegarComPathfinder(targetPos, isPad, anchorRef)
         end
         if rt then rt.Velocity = Vector3.zero; hum:MoveTo(rt.Position) end
     else
-        logMsg("Aviso: Pathfinder falhou. Usando Fallback direto.")
+        logMsg("Aviso: Pathfinder falhou. Rota direta (Fallback)...")
         local timeOut = 0
         while timeOut < 150 do
             c, rt, hum = getChar()
@@ -274,7 +268,7 @@ getgenv().DeliveryLoop = task.spawn(function()
                 local dist = rt and (rt.Position * Vector3.new(1,0,1) - padPos * Vector3.new(1,0,1)).Magnitude or 999
                 
                 if dist > 6 then
-                    logMsg("Iniciando navegação para o Pad de Trabalho.")
+                    logMsg("Iniciando navegação para o Pad...")
                     NavegarComPathfinder(padPos, true, nil)
                 end
                 
@@ -292,23 +286,15 @@ getgenv().DeliveryLoop = task.spawn(function()
             local t = ws:FindFirstChild("DeliveryTargetAnchor")
             if t and t.Parent == ws then
                 if t ~= getgenv().LastAnchor then
-                    -- =========================================
-                    -- PROTEÇÃO DO PONTO ZERO
-                    -- =========================================
-                    if t.Position.Magnitude < 10 then
-                        logMsg("O Alvo está no ponto zero (0,0,0). Aguardando o jogo definir a casa real...")
-                        task.wait(0.5)
-                    else
-                        logMsg("Novo Anchor detectado. Iniciando perseguição.")
-                        NavegarComPathfinder(t.Position, false, t)
-                        getgenv().LastAnchor = t
-                        local tempoCasa = math.random(30, 50) / 10
-                        task.wait(tempoCasa)
-                        task.spawn(function()
-                            task.wait(1.5)
-                            if getgenv().LastAnchor == t then getgenv().LastAnchor = nil end
-                        end)
-                    end
+                    logMsg("Novo Anchor detectado. Iniciando perseguição.")
+                    NavegarComPathfinder(t.Position, false, t)
+                    getgenv().LastAnchor = t
+                    local tempoCasa = math.random(30, 50) / 10
+                    task.wait(tempoCasa)
+                    task.spawn(function()
+                        task.wait(1.5)
+                        if getgenv().LastAnchor == t then getgenv().LastAnchor = nil end
+                    end)
                 end
             else
                 task.wait(0.1)
