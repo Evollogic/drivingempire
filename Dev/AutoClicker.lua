@@ -51,8 +51,8 @@ logToggleBtn.TextSize = 12
 Instance.new("UICorner", logToggleBtn).CornerRadius = UDim.new(0, 6)
 
 local termFrame = Instance.new("Frame", sg)
-termFrame.Size = UDim2.new(0, 350, 0, 300)
-termFrame.Position = UDim2.new(0.5, -100, 0.5, -50)
+termFrame.Size = UDim2.new(0, 400, 0, 350)
+termFrame.Position = UDim2.new(0.5, -120, 0.5, -50)
 termFrame.BackgroundColor3 = Color3.fromRGB(15, 15, 18)
 termFrame.Visible = true
 termFrame.Active = true
@@ -108,7 +108,7 @@ local termList = Instance.new("UIListLayout", termScroll)
 local function logMsg(msg)
     local t = os.date("%H:%M:%S") .. " | " .. tostring(msg)
     table.insert(allLogs, t)
-
+    
     local txt = Instance.new("TextLabel", termScroll)
     txt.Size = UDim2.new(1, 0, 0, 0)
     txt.AutomaticSize = Enum.AutomaticSize.Y
@@ -118,11 +118,11 @@ local function logMsg(msg)
     txt.TextXAlignment = Enum.TextXAlignment.Left
     txt.TextWrapped = true
     txt.Text = t
-
+    
     termScroll.CanvasPosition = Vector2.new(0, termScroll.AbsoluteWindowSize.Y + 9999)
 end
 
-logMsg("Monitor de Alta Frequência Carregado.")
+logMsg("Monitor Ultra-Detalhado Carregado.")
 
 termCopyBtn.MouseButton1Click:Connect(function()
     if setclipboard then
@@ -153,94 +153,48 @@ termCloseBtn.MouseButton1Click:Connect(function()
 end)
 
 -- =========================================================================
--- SISTEMA DE MONITORAMENTO EM TEMPO REAL
+-- MONITORAMENTO ULTRA-DETALHADO DE DESCENDENTES DA CABEÇA
 -- =========================================================================
 local isMonitoring = false
 local monitorLoop = nil
+local lastValues = {}
 
-local lastState = {
-    barVisible = nil,
-    barFill = nil,
-    money = nil,
-    job = nil,
-    bbgFound = nil
-}
-
-local function scanHead()
+local function scanHeadDeep()
     local char = lp.Character
     if not char then return end
     local head = char:FindFirstChild("Head")
     if not head then return end
-    
+
     local bbg = head:FindFirstChild("CharacterBillboard")
-    
     if not bbg then
-        if lastState.bbgFound ~= false then
-            logMsg("⚠️ Billboard não encontrado na cabeça.")
-            lastState.bbgFound = false
-        end
+        logMsg("⚠️ Billboard não encontrado.")
         return
     end
 
-    if lastState.bbgFound ~= true then
-        logMsg("✅ Billboard rastreado com sucesso! Iniciando leitura.")
-        lastState.bbgFound = true
-    end
-
-    local currentState = {
-        barVisible = false,
-        barFill = "N/A",
-        money = "",
-        job = ""
-    }
-
-    -- Procura o container da barra
-    local packageBar = bbg:FindFirstChild("PackageBarFrame", true)
-    if packageBar then
-        currentState.barVisible = packageBar.Visible
-        
-        -- Se estiver visível, tenta achar a barrinha que preenche dentro dele
-        if currentState.barVisible then
-            for _, child in pairs(packageBar:GetChildren()) do
-                if child:IsA("Frame") or child:IsA("ImageLabel") then
-                    -- Grava o tamanho X (ex: 0.50 significa 50% cheio)
-                    currentState.barFill = string.format("%.2f", child.Size.X.Scale)
+    -- Varre absolutamente tudo dentro do Billboard para capturar qualquer alteração de tamanho ou propriedade
+    for _, desc in pairs(bbg:GetDescendants()) do
+        if desc:IsA("Frame") or desc:IsA("ImageLabel") or desc:IsA("TextLabel") then
+            local pathName = desc.Name
+            local parentName = desc.Parent and desc.Parent.Name or "Unknown"
+            local key = parentName .. "." .. pathName
+            
+            if desc:IsA("GuiObject") then
+                local scaleX = string.format("%.3f", desc.Size.X.Scale)
+                local scaleY = string.format("%.3f", desc.Size.Y.Scale)
+                local info = string.Format = "Scale(X: " .. scaleX .. ", Y: " .. scaleY .. ") Vis: " .. tostring(desc.Visible)
+                
+                if lastValues[key] ~= info then
+                    logMsg("🔍 [" .. key .. "] " .. info)
+                    lastValues[key] = info
+                end
+            elseif desc:IsA("TextLabel") then
+                local txtInfo = "Text: " .. desc.Text
+                if lastValues[key] ~= txtInfo then
+                    logMsg("💬 [" .. key .. "] " .. txtInfo)
+                    lastValues[key] = txtInfo
                 end
             end
         end
-    end
-
-    -- Procura os textos
-    for _, child in pairs(bbg:GetChildren()) do
-        if child.Name == "CriminalCharacterTextLabel" and child:IsA("TextLabel") then
-            if child.Text:match("%$") then
-                currentState.money = child.Text
-            end
-        elseif child.Name == "JobTextLabel" and child:IsA("TextLabel") then
-            currentState.job = child.Text:gsub("<[^>]+>", "")
-        end
-    end
-
-    -- Compara com o último estado para logar só o que mudou
-    if currentState.barVisible ~= lastState.barVisible then
-        logMsg("📊 PackageBarFrame Visível: " .. tostring(currentState.barVisible))
-        lastState.barVisible = currentState.barVisible
-    end
-
-    -- Se a barra mudou mais de 0.05 (5%) de preenchimento, avisa no log
-    if currentState.barFill ~= "N/A" and currentState.barFill ~= lastState.barFill then
-        logMsg("📈 Barra Preenchimento: " .. currentState.barFill)
-        lastState.barFill = currentState.barFill
-    end
-
-    if currentState.money ~= lastState.money then
-        logMsg("💰 Dinheiro: " .. currentState.money)
-        lastState.money = currentState.money
-    end
-
-    if currentState.job ~= lastState.job then
-        logMsg("💼 Profissão/Nível: " .. currentState.job)
-        lastState.job = currentState.job
     end
 end
 
@@ -250,12 +204,12 @@ monitorBtn.MouseButton1Click:Connect(function()
     if isMonitoring then
         monitorBtn.Text = "STOP MONITOR"
         monitorBtn.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
-        logMsg("🟢 Monitoramento Iniciado! Lendo cabeça 10x por segundo...")
+        logMsg("🟢 Monitoramento Profundo Ativo! Gravando alterações na cabeça...")
         
         monitorLoop = task.spawn(function()
             while isMonitoring do
-                scanHead()
-                task.wait(0.1) -- Alta frequência
+                scanHeadDeep()
+                task.wait(0.1)
             end
         end)
     else
