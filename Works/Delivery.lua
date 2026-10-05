@@ -10,7 +10,7 @@ repeat task.wait(0.5) until game:IsLoaded()
 repeat task.wait(0.5) until lp.Character and lp.Character:FindFirstChild("HumanoidRootPart")
 
 local function logMsg(msg)
-    local prefix = "[V32-DEBUG] "
+    local prefix = "[V33-DEBUG] "
     if getgenv().LogMsg then
         getgenv().LogMsg(prefix .. msg)
     else
@@ -18,7 +18,7 @@ local function logMsg(msg)
     end
 end
 
-logMsg("Iniciando Motor V32: Fix da Síndrome do Ponto Zero (0,0,0)...")
+logMsg("Iniciando Motor V33: Raycast Floor-Finder e Anti-Zero Point...")
 
 pcall(function() ws.FallenPartsDestroyHeight = -50000 end)
 
@@ -124,27 +124,35 @@ local function NavegarComPathfinder(targetPos, isPad, anchorRef)
     local distInicial = (flatCurrent - flatTarget).Magnitude
 
     if distInicial > 45 then
-        logMsg("Distância alta (" .. math.floor(distInicial) .. "m). Iniciando teleporte de aproximação...")
+        logMsg("Distância alta (" .. math.floor(distInicial) .. "m). Iniciando aproximação com Raycast...")
         local dir = (flatCurrent - flatTarget).Unit
         local charOffset = 35
         
-        local startPos = Vector3.new(targetPos.X + (dir.X * charOffset), targetPos.Y + 10, targetPos.Z + (dir.Z * charOffset))
+        -- Joga o boneco para 100 blocos de altura acima do destino
+        local skyPos = Vector3.new(targetPos.X + (dir.X * charOffset), targetPos.Y + 100, targetPos.Z + (dir.Z * charOffset))
         
-        local tempFloor = Instance.new("Part")
-        tempFloor.Anchored = true
-        tempFloor.CanCollide = true
-        tempFloor.Transparency = 0.5
-        tempFloor.Size = Vector3.new(200, 5, 200)
-        tempFloor.Position = Vector3.new(startPos.X, startPos.Y - 5, startPos.Z)
-        tempFloor.Parent = ws
-        game:GetService("Debris"):AddItem(tempFloor, 15)
-
         rt.Velocity = Vector3.zero
+        rt.CFrame = CFrame.new(skyPos)
         rt.Anchored = true 
-        rt.CFrame = CFrame.new(startPos)
         
+        logMsg("Aguardando mapa renderizar (1.5s)...")
         task.wait(1.5)
+        
+        -- Dispara um laser para baixo para achar o chão real (a calçada visível)
+        local params = RaycastParams.new()
+        params.FilterDescendantsInstances = {c}
+        params.FilterType = Enum.RaycastFilterType.Exclude
+        local hit = ws:Raycast(rt.Position, Vector3.new(0, -200, 0), params)
+        
+        if hit then
+            logMsg("Chão real detectado na altura Y: " .. math.floor(hit.Position.Y) .. ". Aterrissando com segurança.")
+            rt.CFrame = CFrame.new(hit.Position + Vector3.new(0, 4, 0))
+        else
+            logMsg("Aviso: Chão não encontrado. Caindo pela gravidade normal.")
+        end
+
         rt.Anchored = false
+        task.wait(0.2)
     end
 
     hum.PlatformStand = false
@@ -285,7 +293,7 @@ getgenv().DeliveryLoop = task.spawn(function()
             if t and t.Parent == ws then
                 if t ~= getgenv().LastAnchor then
                     -- =========================================
-                    -- AQUI ESTÁ A MAGIA CONTRA O BURACO NEGRO
+                    -- PROTEÇÃO DO PONTO ZERO
                     -- =========================================
                     if t.Position.Magnitude < 10 then
                         logMsg("O Alvo está no ponto zero (0,0,0). Aguardando o jogo definir a casa real...")
