@@ -11,7 +11,6 @@ sg.Name = "DevClickerUI"
 sg.Parent = uiParent
 
 local allLogs = {}
-
 local termFrame = Instance.new("Frame", sg)
 termFrame.Size = UDim2.new(0, 500, 0, 400)
 termFrame.Position = UDim2.new(0.5, -250, 0.5, -200)
@@ -29,7 +28,7 @@ local termTitle = Instance.new("TextLabel", termTop)
 termTitle.Size = UDim2.new(0.5, 0, 1, 0)
 termTitle.Position = UDim2.new(0, 10, 0, 0)
 termTitle.BackgroundTransparency = 1
-termTitle.Text = "📟 Modo Dev - Scanner de UI"
+termTitle.Text = "📟 Modo Dev - Tracker de Mudanças"
 termTitle.TextColor3 = Color3.fromRGB(100, 255, 100)
 termTitle.Font = Enum.Font.GothamBold
 termTitle.TextSize = 14
@@ -67,7 +66,7 @@ local termList = Instance.new("UIListLayout", termScroll)
 local function logMsg(msg)
     local t = os.date("%H:%M:%S") .. " | " .. tostring(msg)
     table.insert(allLogs, t)
-    
+
     local txt = Instance.new("TextLabel", termScroll)
     txt.Size = UDim2.new(1, 0, 0, 0)
     txt.AutomaticSize = Enum.AutomaticSize.Y
@@ -77,11 +76,11 @@ local function logMsg(msg)
     txt.TextXAlignment = Enum.TextXAlignment.Left
     txt.TextWrapped = true
     txt.Text = t
-    
+
     termScroll.CanvasPosition = Vector2.new(0, termScroll.AbsoluteWindowSize.Y + 9999)
 end
 
-logMsg("Painel DEV Ativado. Execute sua coleta manualmente.")
+logMsg("Painel DEV Tracker. Ele vai gravar apenas as MUDANÇAS na UI.")
 
 termCopyBtn.MouseButton1Click:Connect(function()
     if setclipboard then
@@ -94,34 +93,56 @@ end)
 
 local isMonitoring = false
 local monitorLoop = nil
+local previousStates = {}
+local isFirstScan = true
 
-local function scanBruteForce()
+local function scanChanges()
     local char = lp.Character
     if not char then return end
-    
+
     local head = char:FindFirstChild("Head")
     if not head then return end
-    
+
     local bbg = head:FindFirstChild("CharacterBillboard")
-    if not bbg then 
-        logMsg("⚠️ CharacterBillboard ausente na cabeça.") 
-        return 
+    if not bbg then
+        if not isFirstScan then logMsg("⚠️ CharacterBillboard desapareceu.") end
+        return
     end
-    
-    logMsg("--- 🔍 VARRENDO ELEMENTOS ---")
-    local found = 0
-    
+
+    local changesFound = 0
+
     for _, desc in pairs(bbg:GetDescendants()) do
+        local stateStr = nil
+        local displayStr = nil
+
         if desc:IsA("Frame") or desc:IsA("ImageLabel") then
-            logMsg("🔳 " .. desc.Name .. " | " .. tostring(desc.Size) .. " | Vis: " .. tostring(desc.Visible))
-            found = found + 1
+            stateStr = tostring(desc.Visible) .. "|" .. tostring(desc.Size)
+            displayStr = "Visível: " .. tostring(desc.Visible) .. " | Size: " .. tostring(desc.Size)
         elseif desc:IsA("TextLabel") then
-            logMsg("💬 " .. desc.Name .. " | Texto: " .. desc.Text)
-            found = found + 1
+            stateStr = tostring(desc.Visible) .. "|" .. tostring(desc.Text)
+            displayStr = "Visível: " .. tostring(desc.Visible) .. " | Texto: '" .. desc.Text .. "'"
+        end
+
+        if stateStr then
+            if isFirstScan then
+                previousStates[desc] = stateStr
+            else
+                local oldState = previousStates[desc]
+                if oldState ~= stateStr then
+                    logMsg("🔄 " .. desc.Name .. " alterou -> " .. displayStr)
+                    previousStates[desc] = stateStr
+                    changesFound = changesFound + 1
+                end
+            end
         end
     end
-    
-    if found == 0 then logMsg("⚠️ Billboard está VAZIO.") end
+
+    if isFirstScan then
+        logMsg("✅ Estado base capturado! Agora vá pegar ou cancelar o serviço.")
+        isFirstScan = false
+    elseif changesFound > 0 then
+        logMsg("--- ☝️ Ação detectada (" .. changesFound .. " elementos mudaram) ---")
+    end
 end
 
 monitorBtn.MouseButton1Click:Connect(function()
@@ -129,11 +150,13 @@ monitorBtn.MouseButton1Click:Connect(function()
     if isMonitoring then
         monitorBtn.Text = "STOP SCAN"
         monitorBtn.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
-        logMsg("🟢 Iniciando SPAM de log (1.5s)...")
+        previousStates = {}
+        isFirstScan = true
+        logMsg("🟢 Iniciando scanner de mudanças (0.5s)...")
         monitorLoop = task.spawn(function()
             while isMonitoring do
-                scanBruteForce()
-                task.wait(1.5)
+                scanChanges()
+                task.wait(0.5) -- Mais rápido para pegar o momento exato
             end
         end)
     else
