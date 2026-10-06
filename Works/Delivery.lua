@@ -10,7 +10,7 @@ repeat task.wait(0.5) until game:IsLoaded()
 repeat task.wait(0.5) until lp.Character and lp.Character:FindFirstChild("HumanoidRootPart")
 
 local function logMsg(msg)
-    local prefix = "[V36-DEBUG] "
+    local prefix = "[V37-DEBUG] "
     if getgenv().LogMsg then
         getgenv().LogMsg(prefix .. msg)
     else
@@ -18,18 +18,18 @@ local function logMsg(msg)
     end
 end
 
-logMsg("Iniciando Motor V36: Protocolo Rigoroso de Início (Fix Loop do Anchor)...")
+logMsg("Motor V37: Visão Raio-X Ativada (Ignorando ruas falsas sem colisão)...")
 
 pcall(function() ws.FallenPartsDestroyHeight = -50000 end)
 
 if getgenv().DeliveryLoop then pcall(task.cancel, getgenv().DeliveryLoop) end
-if getgenv().NoclipLoop then getgenv().NoclipLoop:Disconnect() end
+if getgenv().NoclipLoop then getgenv().NoclipLoop:Disconnect() end -- Noclip EXCLUÍDO (causava quedas)
 if getgenv().AntiSeatLoop then getgenv().AntiSeatLoop:Disconnect() end
 if getgenv().AntiAfkConnection then getgenv().AntiAfkConnection:Disconnect() end
 if getgenv().AntiAfkLoop then pcall(task.cancel, getgenv().AntiAfkLoop) end
 
 getgenv().AutoFarmDelivery = true
-getgenv().JobPhase = "Init" -- FORÇA começar no Init sempre
+getgenv().JobPhase = "Init"
 getgenv().LastAnchor = nil
 
 local vu = game:GetService("VirtualUser")
@@ -70,21 +70,6 @@ getgenv().AntiSeatLoop = rs.Heartbeat:Connect(function()
     end
 end)
 
-getgenv().NoclipLoop = rs.Stepped:Connect(function()
-    if not getgenv().AutoFarmDelivery then return end
-    local c = lp.Character
-    if c then
-        for _, p in pairs(c:GetChildren()) do
-            if p:IsA("BasePart") then
-                local n = p.Name
-                if n ~= "HumanoidRootPart" and not n:match("Leg") and not n:match("Foot") then
-                    p.CanCollide = false
-                end
-            end
-        end
-    end
-end)
-
 local function fRem(n,...)
     local r = remotes:FindFirstChild(n)
     if not r then return end
@@ -115,6 +100,65 @@ local function lerPreenchimentoBarra()
     return false, 0
 end
 
+local function AterrissarSeguro(rt, c, targetPos)
+    local flatCurrent = Vector3.new(rt.Position.X, 0, rt.Position.Z)
+    local flatTarget = Vector3.new(targetPos.X, 0, targetPos.Z)
+    local dir = (flatCurrent - flatTarget).Unit
+    local charOffset = 35
+    
+    local dropX = targetPos.X + (dir.X * charOffset)
+    local dropZ = targetPos.Z + (dir.Z * charOffset)
+    
+    -- Joga pro alto de verdade pra não clipar em montanha
+    local skyY = math.max(targetPos.Y + 400, 600)
+    local skyPos = Vector3.new(dropX, skyY, dropZ)
+    
+    rt.Velocity = Vector3.zero
+    rt.CFrame = CFrame.new(skyPos)
+    rt.Anchored = true 
+    
+    logMsg("Aguardando mapa renderizar (1.5s)...")
+    task.wait(1.5)
+    
+    local params = RaycastParams.new()
+    params.FilterDescendantsInstances = {c}
+    params.FilterType = Enum.RaycastFilterType.Exclude
+
+    local origin = rt.Position
+    local hitPoint = nil
+    
+    -- Tenta 20 vezes caso o chão seja feito de várias camadas falsas
+    for i = 1, 20 do
+        local hit = ws:Raycast(origin, Vector3.new(0, -1500, 0), params)
+        if hit then
+            if hit.Instance.CanCollide then
+                hitPoint = hit.Position
+                logMsg("✅ Chão SÓLIDO encontrado: [" .. hit.Instance.Name .. "] na altura " .. math.floor(hitPoint.Y))
+                break
+            else
+                -- Chão falso visual! Adiciona na lista de ignorados e atira o laser de novo
+                local ignore = params.FilterDescendantsInstances
+                table.insert(ignore, hit.Instance)
+                params.FilterDescendantsInstances = ignore
+                origin = hit.Position - Vector3.new(0, 0.5, 0)
+            end
+        else
+            break
+        end
+    end
+    
+    if hitPoint then
+        rt.CFrame = CFrame.new(hitPoint + Vector3.new(0, 4, 0))
+    else
+        logMsg("⚠️ Chão sólido não encontrado. Caindo perto do alvo...")
+        rt.CFrame = CFrame.new(dropX, targetPos.Y + 10, dropZ)
+    end
+
+    task.wait(0.2)
+    rt.Anchored = false
+    task.wait(0.2)
+end
+
 local function NavegarComPathfinder(targetPos, isPad, anchorRef)
     local c, rt, hum = getChar()
     if not (rt and hum) then return end
@@ -124,29 +168,8 @@ local function NavegarComPathfinder(targetPos, isPad, anchorRef)
     local distInicial = (flatCurrent - flatTarget).Magnitude
 
     if distInicial > 45 then
-        logMsg("Distância alta (" .. math.floor(distInicial) .. "m). Iniciando aterrissagem via Raycast...")
-        local dir = (flatCurrent - flatTarget).Unit
-        local charOffset = 35
-        
-        local skyPos = Vector3.new(targetPos.X + (dir.X * charOffset), targetPos.Y + 100, targetPos.Z + (dir.Z * charOffset))
-        
-        rt.Velocity = Vector3.zero
-        rt.CFrame = CFrame.new(skyPos)
-        rt.Anchored = true 
-        
-        task.wait(1.5)
-        
-        local params = RaycastParams.new()
-        params.FilterDescendantsInstances = {c}
-        params.FilterType = Enum.RaycastFilterType.Exclude
-        local hit = ws:Raycast(rt.Position, Vector3.new(0, -200, 0), params)
-        
-        if hit then
-            rt.CFrame = CFrame.new(hit.Position + Vector3.new(0, 4, 0))
-        end
-
-        rt.Anchored = false
-        task.wait(0.2)
+        logMsg("Distância de " .. math.floor(distInicial) .. "m. Iniciando teleporte e scanner de chão...")
+        AterrissarSeguro(rt, c, targetPos)
     end
 
     hum.PlatformStand = false
@@ -166,6 +189,7 @@ local function NavegarComPathfinder(targetPos, isPad, anchorRef)
 
             if not isPad and anchorRef then
                 if anchorRef.Parent ~= ws then return end
+                -- Checa a distância ignorando a altura (Y), assim resolve se o Anchor estiver um pouco enterrado
                 local distToTarget = (rt.Position * Vector3.new(1,0,1) - targetPos * Vector3.new(1,0,1)).Magnitude
                 if distToTarget <= 8 then
                     fRem("AttemptDeliveryComplete")
@@ -240,8 +264,6 @@ getgenv().DeliveryLoop = task.spawn(function()
     while task.wait(0.2) do
         if not getgenv().AutoFarmDelivery then break end
         
-        -- A LINHA PROBLEMÁTICA FOI DELETADA DAQUI! Ele nunca mais vai pular o Init.
-
         if getgenv().JobPhase == "Init" then
             local modeStr = getgenv().DeliveryMode
             local mode = (modeStr == "Hard" or modeStr == "HighRisk") and "HighRisk" or "Safe"
@@ -257,14 +279,12 @@ getgenv().DeliveryLoop = task.spawn(function()
                 local dist = rt and (rt.Position * Vector3.new(1,0,1) - padPos * Vector3.new(1,0,1)).Magnitude or 999
                 
                 if dist > 6 then
-                    logMsg("Caminhando para o Pad de Trabalho...")
                     NavegarComPathfinder(padPos, true, nil)
                 end
                 
                 c, rt, hum = getChar()
                 if hum and rt then hum:MoveTo(rt.Position) end
                 
-                logMsg("Solicitando o pacote para o Servidor!")
                 fRem("RequestStartJobSession", "Delivery", "jobPad", mode)
                 task.wait(0.5)
                 fRem("AttemptDeliveryPickup")
@@ -272,7 +292,6 @@ getgenv().DeliveryLoop = task.spawn(function()
                 getgenv().JobPhase = "Farming"
                 task.wait(1.5)
             else
-                logMsg("Pad não encontrado. Fique perto da base de entregas!")
                 task.wait(2)
             end
 
@@ -280,7 +299,7 @@ getgenv().DeliveryLoop = task.spawn(function()
             local t = ws:FindFirstChild("DeliveryTargetAnchor")
             if t and t.Parent == ws then
                 if t ~= getgenv().LastAnchor then
-                    logMsg("Novo Alvo de Entrega detectado. Acelerando pra lá!")
+                    logMsg("Novo Alvo detectado. Despachando!")
                     NavegarComPathfinder(t.Position, false, t)
                     getgenv().LastAnchor = t
                     local tempoCasa = math.random(30, 50) / 10
@@ -291,7 +310,6 @@ getgenv().DeliveryLoop = task.spawn(function()
                     end)
                 end
             else
-                -- Caso a entrega suma ou conclua, volta pro Init para pegar outra
                 getgenv().JobPhase = "Init"
                 task.wait(0.1)
             end
