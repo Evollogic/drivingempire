@@ -10,7 +10,7 @@ repeat task.wait(0.5) until game:IsLoaded()
 repeat task.wait(0.5) until lp.Character and lp.Character:FindFirstChild("HumanoidRootPart")
 
 local function logMsg(msg)
-    local prefix = "[V34-DEBUG] "
+    local prefix = "[V35-DEBUG] "
     if getgenv().LogMsg then
         getgenv().LogMsg(prefix .. msg)
     else
@@ -18,7 +18,7 @@ local function logMsg(msg)
     end
 end
 
-logMsg("Iniciando Motor V34: Raycast Puro (Sem falsos bloqueios)...")
+logMsg("Iniciando Motor V35: Fix Crítico - Forçando início do trabalho!")
 
 pcall(function() ws.FallenPartsDestroyHeight = -50000 end)
 
@@ -128,27 +128,21 @@ local function NavegarComPathfinder(targetPos, isPad, anchorRef)
         local dir = (flatCurrent - flatTarget).Unit
         local charOffset = 35
         
-        -- Joga o boneco para 100 blocos de altura
         local skyPos = Vector3.new(targetPos.X + (dir.X * charOffset), targetPos.Y + 100, targetPos.Z + (dir.Z * charOffset))
         
         rt.Velocity = Vector3.zero
         rt.CFrame = CFrame.new(skyPos)
         rt.Anchored = true 
         
-        logMsg("Aguardando mapa renderizar no ar (1.5s)...")
         task.wait(1.5)
         
-        -- Dispara um laser para baixo para achar a calçada visível real
         local params = RaycastParams.new()
         params.FilterDescendantsInstances = {c}
         params.FilterType = Enum.RaycastFilterType.Exclude
         local hit = ws:Raycast(rt.Position, Vector3.new(0, -200, 0), params)
         
         if hit then
-            logMsg("Chão real encontrado na altura Y: " .. math.floor(hit.Position.Y) .. "!")
             rt.CFrame = CFrame.new(hit.Position + Vector3.new(0, 4, 0))
-        else
-            logMsg("Aviso: Chão não encontrado com Raycast. Mantendo altura.")
         end
 
         rt.Anchored = false
@@ -168,10 +162,7 @@ local function NavegarComPathfinder(targetPos, isPad, anchorRef)
             c, rt, hum = getChar()
             if not (rt and hum) then return end
             
-            if rt.Position.Y < -50 then
-                logMsg("ALERTA: Queda pro limbo detectada. Abortando rota.")
-                return
-            end
+            if rt.Position.Y < -50 then return end
 
             if not isPad and anchorRef then
                 if anchorRef.Parent ~= ws then return end
@@ -181,7 +172,6 @@ local function NavegarComPathfinder(targetPos, isPad, anchorRef)
                     fRem("AttemptDeliveryPickup")
                     local vis, pct = lerPreenchimentoBarra()
                     if vis and pct > 0 then
-                        logMsg("Trava Suprema ativada! Coletando...")
                         rt.Velocity = Vector3.zero
                         hum:MoveTo(rt.Position)
                         local timeoutColeta = 0
@@ -191,7 +181,6 @@ local function NavegarComPathfinder(targetPos, isPad, anchorRef)
                             task.wait(0.1)
                             timeoutColeta = timeoutColeta + 1
                         end
-                        logMsg("Coleta finalizada.")
                         return
                     end
                 end
@@ -212,7 +201,6 @@ local function NavegarComPathfinder(targetPos, isPad, anchorRef)
         end
         if rt then rt.Velocity = Vector3.zero; hum:MoveTo(rt.Position) end
     else
-        logMsg("Aviso: Pathfinder falhou. Rota direta (Fallback)...")
         local timeOut = 0
         while timeOut < 150 do
             c, rt, hum = getChar()
@@ -258,6 +246,8 @@ getgenv().DeliveryLoop = task.spawn(function()
             local modeStr = getgenv().DeliveryMode
             local mode = (modeStr == "Hard" or modeStr == "HighRisk") and "HighRisk" or "Safe"
             local pad = nil
+            
+            -- Tenta achar o Pad, mas não trava o script se não achar
             for _,v in pairs(ws:GetDescendants()) do
                 if v:IsA("ProximityPrompt") and v.Name == "JobPadPrompt" then pad = v; break end
             end
@@ -268,25 +258,26 @@ getgenv().DeliveryLoop = task.spawn(function()
                 local dist = rt and (rt.Position * Vector3.new(1,0,1) - padPos * Vector3.new(1,0,1)).Magnitude or 999
                 
                 if dist > 6 then
-                    logMsg("Iniciando navegação para o Pad...")
                     NavegarComPathfinder(padPos, true, nil)
                 end
                 
                 c, rt, hum = getChar()
                 if hum and rt then hum:MoveTo(rt.Position) end
-                fRem("RequestStartJobSession", "Delivery", "jobPad", mode)
-                task.wait(0.5)
-                fRem("AttemptDeliveryPickup")
-                getgenv().JobPhase = "Farming"
-                task.wait(1.5)
-            else
-                task.wait(2)
             end
+            
+            -- ESTA É A CORREÇÃO: Dispara a requisição do job independente de achar o Pad!
+            logMsg("Enviando requisição de início do Job para o servidor...")
+            fRem("RequestStartJobSession", "Delivery", "jobPad", mode)
+            task.wait(0.5)
+            fRem("AttemptDeliveryPickup")
+            getgenv().JobPhase = "Farming"
+            task.wait(1.5)
+
         elseif getgenv().JobPhase == "Farming" then
             local t = ws:FindFirstChild("DeliveryTargetAnchor")
             if t and t.Parent == ws then
                 if t ~= getgenv().LastAnchor then
-                    logMsg("Novo Anchor detectado. Iniciando perseguição.")
+                    logMsg("Novo Anchor detectado. Iniciando perseguição...")
                     NavegarComPathfinder(t.Position, false, t)
                     getgenv().LastAnchor = t
                     local tempoCasa = math.random(30, 50) / 10
@@ -297,6 +288,8 @@ getgenv().DeliveryLoop = task.spawn(function()
                     end)
                 end
             else
+                -- Se estivemos em Farming mas o TargetAnchor sumiu, voltamos pro Init para forçar pegar pacote novo
+                getgenv().JobPhase = "Init"
                 task.wait(0.1)
             end
         end
