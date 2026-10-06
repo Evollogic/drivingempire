@@ -10,7 +10,7 @@ repeat task.wait(0.5) until game:IsLoaded()
 repeat task.wait(0.5) until lp.Character and lp.Character:FindFirstChild("HumanoidRootPart")
 
 local function logMsg(msg)
-    local prefix = "[V35-DEBUG] "
+    local prefix = "[V36-DEBUG] "
     if getgenv().LogMsg then
         getgenv().LogMsg(prefix .. msg)
     else
@@ -18,7 +18,7 @@ local function logMsg(msg)
     end
 end
 
-logMsg("Iniciando Motor V35: Fix Crítico - Forçando início do trabalho!")
+logMsg("Iniciando Motor V36: Protocolo Rigoroso de Início (Fix Loop do Anchor)...")
 
 pcall(function() ws.FallenPartsDestroyHeight = -50000 end)
 
@@ -29,7 +29,7 @@ if getgenv().AntiAfkConnection then getgenv().AntiAfkConnection:Disconnect() end
 if getgenv().AntiAfkLoop then pcall(task.cancel, getgenv().AntiAfkLoop) end
 
 getgenv().AutoFarmDelivery = true
-getgenv().JobPhase = "Init"
+getgenv().JobPhase = "Init" -- FORÇA começar no Init sempre
 getgenv().LastAnchor = nil
 
 local vu = game:GetService("VirtualUser")
@@ -240,14 +240,13 @@ getgenv().DeliveryLoop = task.spawn(function()
     while task.wait(0.2) do
         if not getgenv().AutoFarmDelivery then break end
         
-        if ws:FindFirstChild("DeliveryTargetAnchor") then getgenv().JobPhase = "Farming" end
+        -- A LINHA PROBLEMÁTICA FOI DELETADA DAQUI! Ele nunca mais vai pular o Init.
 
         if getgenv().JobPhase == "Init" then
             local modeStr = getgenv().DeliveryMode
             local mode = (modeStr == "Hard" or modeStr == "HighRisk") and "HighRisk" or "Safe"
             local pad = nil
             
-            -- Tenta achar o Pad, mas não trava o script se não achar
             for _,v in pairs(ws:GetDescendants()) do
                 if v:IsA("ProximityPrompt") and v.Name == "JobPadPrompt" then pad = v; break end
             end
@@ -258,26 +257,30 @@ getgenv().DeliveryLoop = task.spawn(function()
                 local dist = rt and (rt.Position * Vector3.new(1,0,1) - padPos * Vector3.new(1,0,1)).Magnitude or 999
                 
                 if dist > 6 then
+                    logMsg("Caminhando para o Pad de Trabalho...")
                     NavegarComPathfinder(padPos, true, nil)
                 end
                 
                 c, rt, hum = getChar()
                 if hum and rt then hum:MoveTo(rt.Position) end
+                
+                logMsg("Solicitando o pacote para o Servidor!")
+                fRem("RequestStartJobSession", "Delivery", "jobPad", mode)
+                task.wait(0.5)
+                fRem("AttemptDeliveryPickup")
+                
+                getgenv().JobPhase = "Farming"
+                task.wait(1.5)
+            else
+                logMsg("Pad não encontrado. Fique perto da base de entregas!")
+                task.wait(2)
             end
-            
-            -- ESTA É A CORREÇÃO: Dispara a requisição do job independente de achar o Pad!
-            logMsg("Enviando requisição de início do Job para o servidor...")
-            fRem("RequestStartJobSession", "Delivery", "jobPad", mode)
-            task.wait(0.5)
-            fRem("AttemptDeliveryPickup")
-            getgenv().JobPhase = "Farming"
-            task.wait(1.5)
 
         elseif getgenv().JobPhase == "Farming" then
             local t = ws:FindFirstChild("DeliveryTargetAnchor")
             if t and t.Parent == ws then
                 if t ~= getgenv().LastAnchor then
-                    logMsg("Novo Anchor detectado. Iniciando perseguição...")
+                    logMsg("Novo Alvo de Entrega detectado. Acelerando pra lá!")
                     NavegarComPathfinder(t.Position, false, t)
                     getgenv().LastAnchor = t
                     local tempoCasa = math.random(30, 50) / 10
@@ -288,7 +291,7 @@ getgenv().DeliveryLoop = task.spawn(function()
                     end)
                 end
             else
-                -- Se estivemos em Farming mas o TargetAnchor sumiu, voltamos pro Init para forçar pegar pacote novo
+                -- Caso a entrega suma ou conclua, volta pro Init para pegar outra
                 getgenv().JobPhase = "Init"
                 task.wait(0.1)
             end
