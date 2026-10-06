@@ -17,7 +17,7 @@ local function logMsg(msg)
     end
 end
 
-logMsg("Motor V41: Pad OBRIGATÓRIO! Correção de Respawn/Reset. Retorno automático ao serviço garantido.")
+logMsg("Motor V42: Interrupção Imediata! Bot agora para na hora, cancela a rota e volta pro Pad se desligado no Hub.")
 
 task.wait(6)
 pcall(function() ws.FallenPartsDestroyHeight = -50000 end)
@@ -135,9 +135,6 @@ local function lerPreenchimentoBarra()
     return false, 0
 end
 
--- =========================================================================
--- SISTEMA DE RAIO-X BLINDADO (IDENTIFICA O TERRAIN)
--- =========================================================================
 local function ScanGroundRaycast(startPos)
     local rayOrigin = Vector3.new(startPos.X, startPos.Y + 800, startPos.Z)
     local rayDirection = Vector3.new(0, -1600, 0)
@@ -166,11 +163,8 @@ local function ScanGroundRaycast(startPos)
     return nil, nil
 end
 
--- =========================================================================
--- MOTOR NAVEGADOR COM PATHFINDER NATIVO E GANCHO NO CÉU
--- =========================================================================
 local function NavegarComPathfinder(targetPos, isPad, anchorRef)
-    local startingChar = lp.Character -- Salva quem é o personagem ao iniciar a rota
+    local startingChar = lp.Character 
     local c, rt, hum = getChar()
     if not (rt and hum) then return false end
 
@@ -183,18 +177,16 @@ local function NavegarComPathfinder(targetPos, isPad, anchorRef)
         local charOffset = math.random(35, 45)
         local safeSpotFlat = Vector3.new(targetPos.X + (dir.X * charOffset), targetPos.Y, targetPos.Z + (dir.Z * charOffset))
 
-        logMsg("[V41-DEBUG] Distância de " .. math.floor(distInicial) .. "m. Ancorando no céu para carregar mapa...")
         rt.Velocity = Vector3.zero
         rt.CFrame = CFrame.new(safeSpotFlat + Vector3.new(0, 300, 0))
         rt.Anchored = true
         task.wait(1.5)
+        if not getgenv().AutoFarmDelivery then rt.Anchored = false return false end -- Aborta se desligou
 
         local chaoPos, chaoPart = ScanGroundRaycast(safeSpotFlat)
         if chaoPos then
-            logMsg("[V41-DEBUG] ✅ Chão SÓLIDO encontrado: [" .. chaoPart.Name .. "] na altura " .. math.floor(chaoPos.Y))
             rt.CFrame = CFrame.new(chaoPos + Vector3.new(0, 4, 0))
         else
-            logMsg("[V41-DEBUG] ⚠ Chão não renderizou. Usando ponte gigante de emergência...")
             local tempFloor = Instance.new("Part")
             tempFloor.Anchored = true; tempFloor.CanCollide = true; tempFloor.Transparency = 1
             tempFloor.Size = Vector3.new(400, 5, 400)
@@ -208,7 +200,8 @@ local function NavegarComPathfinder(targetPos, isPad, anchorRef)
         task.wait(0.3)
     end
 
-    if lp.Character ~= startingChar then return false end -- Aborta se deu reset
+    if lp.Character ~= startingChar then return false end
+    if not getgenv().AutoFarmDelivery then return false end -- Aborta se desligou
 
     hum.PlatformStand = false; hum.Sit = false; hum:ChangeState(Enum.HumanoidStateType.Running)
 
@@ -220,7 +213,8 @@ local function NavegarComPathfinder(targetPos, isPad, anchorRef)
     if success and path.Status == Enum.PathStatus.Success then
         local waypoints = path:GetWaypoints()
         for i, wp in ipairs(waypoints) do
-            if lp.Character ~= startingChar then return false end -- Aborta se deu reset no meio do caminho
+            if not getgenv().AutoFarmDelivery then return false end -- Aborta se desligou
+            if lp.Character ~= startingChar then return false end
 
             c, rt, hum = getChar()
             if not (rt and hum) then return false end
@@ -234,16 +228,15 @@ local function NavegarComPathfinder(targetPos, isPad, anchorRef)
                     fRem("AttemptDeliveryPickup")
                     local vis, pct = lerPreenchimentoBarra()
                     if vis and pct > 0 then
-                        logMsg("🛑 Zona de Coleta alcançada! Fill em " .. math.floor(pct*100) .. "%. Congelando no waypoint!")
                         rt.Velocity = Vector3.zero
                         hum:MoveTo(rt.Position)
                         while anchorRef.Parent == ws do
+                            if not getgenv().AutoFarmDelivery then return false end -- Aborta se desligou
                             if lp.Character ~= startingChar then return false end
                             local v, p = lerPreenchimentoBarra()
                             if not v or p >= 0.99 then break end
                             task.wait(0.1)
                         end
-                        logMsg("✅ Coleta 100% concluída!")
                         return true
                     end
                 end
@@ -254,6 +247,7 @@ local function NavegarComPathfinder(targetPos, isPad, anchorRef)
 
             local moveOut = 0
             while moveOut < 40 do
+                if not getgenv().AutoFarmDelivery then return false end -- Aborta se desligou
                 if lp.Character ~= startingChar then return false end
                 c, rt, hum = getChar()
                 if not (rt and hum) then break end
@@ -266,7 +260,6 @@ local function NavegarComPathfinder(targetPos, isPad, anchorRef)
         if hum and rt then rt.Velocity = Vector3.zero; hum:MoveTo(rt.Position) end
         return true
     else
-        logMsg("⚠️ Caminho normal bloqueado ou falhou. Teleportando acima do alvo e caindo...")
         c, rt, hum = getChar()
         if not (rt and hum) then return false end
         rt.Velocity = Vector3.zero
@@ -276,6 +269,7 @@ local function NavegarComPathfinder(targetPos, isPad, anchorRef)
 
         local fallTimeout = 0
         while fallTimeout < 80 do
+            if not getgenv().AutoFarmDelivery then return false end -- Aborta se desligou
             if lp.Character ~= startingChar then return false end
             c, rt, hum = getChar()
             if not (rt and hum) then return false end
@@ -292,6 +286,7 @@ local function NavegarComPathfinder(targetPos, isPad, anchorRef)
                         rt.Velocity = Vector3.zero
                         hum:MoveTo(rt.Position)
                         while anchorRef.Parent == ws do
+                            if not getgenv().AutoFarmDelivery then return false end -- Aborta se desligou
                             if lp.Character ~= startingChar then return false end
                             local v, p = lerPreenchimentoBarra()
                             if not v or p >= 0.99 then break end
@@ -313,11 +308,38 @@ end
 -- =========================================================================
 getgenv().DeliveryLoop = task.spawn(function()
     while task.wait(0.2) do
-        if not getgenv().AutoFarmDelivery then break end
+        
+        -- SISTEMA DE INTERRUPÇÃO (STANDBY) AO DESLIGAR NO HUB
+        if not getgenv().AutoFarmDelivery then
+            if getgenv().JobPhase ~= "Standby" then
+                logMsg("🛑 Serviço desativado no Hub! Cancelando rota e retornando ao Pad...")
+                getgenv().JobPhase = "Standby"
+                getgenv().LastAnchor = nil
+                
+                -- Procura o Pad para voltar à origem
+                local pad = nil
+                for _,v in pairs(ws:GetDescendants()) do
+                    if v:IsA("ProximityPrompt") and v.Name == "JobPadPrompt" then
+                        pad = v; break
+                    end
+                end
+                
+                local charC, charRt, charHum = getChar()
+                if charRt and pad then
+                    charRt.Velocity = Vector3.zero
+                    charRt.CFrame = CFrame.new(pad.Parent.Position + Vector3.new(0, 5, 0))
+                end
+            end
+            continue -- Mantém o loop vivo, mas "dormindo"
+        end
+
+        -- Se religar o Hub após o Standby
+        if getgenv().JobPhase == "Standby" then
+            getgenv().JobPhase = "Init"
+        end
 
         local charC, charRt, charHum = getChar()
         
-        -- VERIFICAÇÃO ATIVA DE MUDANÇA DE PERSONAGEM (RESET/RESPAWN)
         if charC and getgenv().CurrentCharacter ~= charC then
             logMsg("🔄 Respawn/Reset detectado! Personagem mudou. Retornando ao Pad para reiniciar serviço...")
             getgenv().CurrentCharacter = charC
@@ -336,7 +358,7 @@ getgenv().DeliveryLoop = task.spawn(function()
             logMsg("💀 ALERTA: O Bot MORREU! Motivo: Vida zerada.")
             getgenv().JobPhase = "Init"
             getgenv().LastAnchor = nil
-            getgenv().CurrentCharacter = nil -- Força a atualização no próximo spawn
+            getgenv().CurrentCharacter = nil 
             task.wait(5)
             continue
         end
@@ -367,7 +389,6 @@ getgenv().DeliveryLoop = task.spawn(function()
                 local dist = rt and (rt.Position * Vector3.new(1,0,1) - padPos * Vector3.new(1,0,1)).Magnitude or 999
                 
                 if dist > 6 then
-                    logMsg("🚶 Caminhando para o pad (Iniciando trabalho)...")
                     NavegarComPathfinder(padPos, true, nil)
                 end
                 
@@ -408,7 +429,6 @@ getgenv().DeliveryLoop = task.spawn(function()
             end
 
             if t ~= getgenv().LastAnchor then
-                logMsg("[V41-DEBUG] Despachando para a entrega...")
                 getgenv().LastAnchor = t
                 local sucesso = NavegarComPathfinder(t.Position, false, t)
                 
@@ -417,11 +437,11 @@ getgenv().DeliveryLoop = task.spawn(function()
                     logMsg("📦 Sucesso! Próximo em " .. tempoCasa .. "s...")
                     task.wait(tempoCasa)
                     
-                    -- CORREÇÃO: Garante o reset do LastAnchor e aguarda o próximo alvo carregar antes do próximo ciclo
                     getgenv().LastAnchor = nil
                     local waitSpawn = 0
                     while not ws:FindFirstChild("DeliveryTargetAnchor") and waitSpawn < 30 do
-                        if getgenv().CurrentCharacter ~= lp.Character then break end -- Se resetar durante a espera, aborta
+                        if not getgenv().AutoFarmDelivery then break end -- Sai da espera se desligar
+                        if getgenv().CurrentCharacter ~= lp.Character then break end 
                         waitSpawn = waitSpawn + 1
                         task.wait(0.1)
                     end
