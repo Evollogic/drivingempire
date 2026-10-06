@@ -13,7 +13,7 @@ local function logMsg(msg)
     if getgenv().LogMsg then getgenv().LogMsg(msg) else print("Delivery: " .. tostring(msg)) end
 end
 
-logMsg("Motor V38: Loop de Despacho Infinito Corrigido (Anti-Stuck Ativado).")
+logMsg("Motor V39: Bug da Terra Corrigido (Raio-X reconfigurado) + Gancho no Céu.")
 task.wait(6)
 
 pcall(function() ws.FallenPartsDestroyHeight = -50000 end)
@@ -28,7 +28,7 @@ if getgenv().AntiVoidLoop then getgenv().AntiVoidLoop:Disconnect() end
 getgenv().AutoFarmDelivery = true
 getgenv().JobPhase = "Init"
 getgenv().LastAnchor = nil
-local badTargets = {} -- Lista negra para alvos bugados
+local badTargets = {} 
 
 local vu = game:GetService("VirtualUser")
 local vim = game:GetService("VirtualInputManager")
@@ -126,42 +126,43 @@ local function lerPreenchimentoBarra()
 end
 
 -- =========================================================================
--- SISTEMA DE RAIO-X (VISÃO PROFUNDA) PARA ACHAR CHÃO SÓLIDO
+-- SISTEMA DE RAIO-X REFEITO (NÃO IGNORA O TERRAIN)
 -- =========================================================================
 local function ScanGroundRaycast(startPos)
-    local rayOrigin = startPos + Vector3.new(0, 500, 0)
-    local rayDirection = Vector3.new(0, -1000, 0)
+    local rayOrigin = Vector3.new(startPos.X, startPos.Y + 800, startPos.Z)
+    local rayDirection = Vector3.new(0, -1600, 0)
 
     local raycastParams = RaycastParams.new()
     raycastParams.FilterType = Enum.RaycastFilterType.Exclude
     raycastParams.IgnoreWater = true
     
-    -- Ignora todas as ruas falsas do StreamingEnabled
-    local ignoreList = {ws:FindFirstChild("Terrain")} 
+    local ignoreList = {}
     local c = lp.Character
     if c then table.insert(ignoreList, c) end
-    
-    local mapModels = ws:FindFirstChild("Map") or ws
-    for _, v in pairs(mapModels:GetDescendants()) do
-        if v:IsA("BasePart") then
-            -- Se for uma rua invisível, sem colisão ou placeholder, ignora!
-            if v.Transparency == 1 or not v.CanCollide or v.Name:lower():match("placeholder") or v.Name:lower():match("lod") then
-                table.insert(ignoreList, v)
-            end
-        end
-    end
     raycastParams.FilterDescendantsInstances = ignoreList
 
-    local rayResult = ws:Raycast(rayOrigin, rayDirection, raycastParams)
-    
-    if rayResult and rayResult.Instance then
-        return rayResult.Position, rayResult.Instance
+    local result = nil
+    for i = 1, 10 do -- Tenta até 10 vezes para furar paredes invisíveis do mapa
+        result = ws:Raycast(rayOrigin, rayDirection, raycastParams)
+        if result and result.Instance then
+            -- Se tiver colisão E for visível (ou for o Terrain), achou o chão!
+            if result.Instance.CanCollide and (result.Instance:IsA("Terrain") or result.Instance.Transparency < 1) then
+                return result.Position, result.Instance
+            else
+                -- Bateu numa parede fantasma, bota na lista negra e atira de novo
+                table.insert(ignoreList, result.Instance)
+                raycastParams.FilterDescendantsInstances = ignoreList
+            end
+        else
+            break
+        end
     end
+    
     return nil, nil
 end
 
 -- =========================================================================
--- MOTOR NAVEGADOR COM PATHFINDER NATIVO E RAIO-X
+-- MOTOR NAVEGADOR COM PATHFINDER NATIVO E GANCHO NO CÉU
 -- =========================================================================
 local function NavegarComPathfinder(targetPos, isPad, anchorRef)
     local c, rt, hum = getChar()
@@ -174,35 +175,36 @@ local function NavegarComPathfinder(targetPos, isPad, anchorRef)
     if distInicial > 45 then
         local dir = (flatCurrent - flatTarget).Unit
         local charOffset = math.random(35, 45)
-        local safeSpot = Vector3.new(targetPos.X + (dir.X * charOffset), targetPos.Y, targetPos.Z + (dir.Z * charOffset))
+        local safeSpotFlat = Vector3.new(targetPos.X + (dir.X * charOffset), targetPos.Y, targetPos.Z + (dir.Z * charOffset))
         
-        logMsg("[V38-DEBUG] Distância de " .. math.floor(distInicial) .. "m. Escaneando terreno...")
+        logMsg("[V39-DEBUG] Distância de " .. math.floor(distInicial) .. "m. Ancorando no céu para carregar mapa...")
         
-        local chaoPos, chaoPart = ScanGroundRaycast(safeSpot)
+        -- GANCHO NO CÉU (Espera o jogo carregar o mapa embaixo sem cair na agua)
+        rt.Velocity = Vector3.zero
+        rt.CFrame = CFrame.new(safeSpotFlat + Vector3.new(0, 300, 0))
+        rt.Anchored = true
+        task.wait(1.5) 
+        
+        local chaoPos, chaoPart = ScanGroundRaycast(safeSpotFlat)
         
         if chaoPos then
-            logMsg("[V38-DEBUG] ✅ Chão SÓLIDO encontrado: [" .. chaoPart.Name .. "] na altura " .. math.floor(chaoPos.Y))
-            
-            rt.Velocity = Vector3.zero
-            rt.CFrame = CFrame.new(chaoPos + Vector3.new(0, 5, 0))
-            rt.Anchored = true
-            task.wait(1.5)
-            rt.Anchored = false
+            logMsg("[V39-DEBUG] ✅ Chão SÓLIDO encontrado: [" .. chaoPart.Name .. "] na altura " .. math.floor(chaoPos.Y))
+            rt.CFrame = CFrame.new(chaoPos + Vector3.new(0, 4, 0))
         else
-            logMsg("[V38-DEBUG] ⚠️ Chão sólido não encontrado. Usando piso falso...")
+            logMsg("[V39-DEBUG] ⚠️ Chão invisível. Usando ponte gigante de emergência...")
             local tempFloor = Instance.new("Part")
             tempFloor.Anchored = true; tempFloor.CanCollide = true; tempFloor.Transparency = 1
-            tempFloor.Size = Vector3.new(300, 5, 300)
-            tempFloor.Position = Vector3.new(safeSpot.X, targetPos.Y - 5, safeSpot.Z)
+            tempFloor.Size = Vector3.new(400, 5, 400)
+            tempFloor.Position = Vector3.new(safeSpotFlat.X, targetPos.Y - 2.5, safeSpotFlat.Z)
             tempFloor.Parent = ws
             game:GetService("Debris"):AddItem(tempFloor, 15)
             
-            rt.Velocity = Vector3.zero
-            rt.CFrame = CFrame.new(safeSpot + Vector3.new(0, 10, 0))
-            rt.Anchored = true
-            task.wait(1.5)
-            rt.Anchored = false
+            rt.CFrame = CFrame.new(safeSpotFlat + Vector3.new(0, 5, 0))
         end
+        
+        task.wait(0.2)
+        rt.Anchored = false
+        task.wait(0.3) -- Espera o boneco firmar o pé no chão
     end
     
     hum.PlatformStand = false; hum.Sit = false; hum:ChangeState(Enum.HumanoidStateType.Running)
@@ -224,7 +226,7 @@ local function NavegarComPathfinder(targetPos, isPad, anchorRef)
         for i, wp in ipairs(waypoints) do
             c, rt, hum = getChar()
             if not (rt and hum) then return false end
-            if rt.Position.Y - targetPos.Y < -30 then return false end -- Caiu no void, quebra e reseta
+            if rt.Position.Y - targetPos.Y < -40 then return false end -- Caiu do mapa
             
             if not isPad and anchorRef then
                 if anchorRef.Parent ~= ws then return true end -- Alvo sumiu, sucesso
@@ -306,12 +308,12 @@ local function NavegarComPathfinder(targetPos, isPad, anchorRef)
             timeOut = timeOut + 1
             task.wait(0.1)
         end
-        return false -- Falhou em chegar no fallback
+        return false 
     end
 end
 
 -- =========================================================================
--- LOOP PRINCIPAL DO FARM (CÉREBRO REFEITO)
+-- LOOP PRINCIPAL DO FARM (COM ANTI-STUCK E LISTA NEGRA)
 -- =========================================================================
 getgenv().DeliveryLoop = task.spawn(function()
     while task.wait(0.2) do
@@ -354,24 +356,21 @@ getgenv().DeliveryLoop = task.spawn(function()
         elseif getgenv().JobPhase == "Farming" then
             local t = ws:FindFirstChild("DeliveryTargetAnchor")
             
-            -- Se não tem alvo, reseta a variável para não ficar preso fantasma
             if not t or t.Parent ~= ws then
                 getgenv().LastAnchor = nil
                 task.wait(0.5)
                 continue
             end
             
-            -- Verifica se o alvo está na lista negra (bugado)
             if badTargets[t] and (tick() - badTargets[t] < 10) then
                 task.wait(0.5)
                 continue
             end
             
             if t ~= getgenv().LastAnchor then
-                logMsg("[V38-DEBUG] Despachando para o alvo...")
+                logMsg("[V39-DEBUG] Despachando para o alvo...")
                 getgenv().LastAnchor = t
                 
-                -- Tenta navegar. Se retornar false, significa que o boneco travou ou caiu
                 local sucesso = NavegarComPathfinder(t.Position, false, t)
                 
                 if sucesso then
@@ -380,7 +379,7 @@ getgenv().DeliveryLoop = task.spawn(function()
                     task.wait(tempoCasa)
                 else
                     logMsg("⚠️ Caminhada falhou ou travou. Resetando alvo...")
-                    badTargets[t] = tick() -- Põe na lista negra por 10s
+                    badTargets[t] = tick()
                     getgenv().LastAnchor = nil
                     task.wait(2)
                 end
