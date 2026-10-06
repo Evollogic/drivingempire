@@ -26,9 +26,9 @@ if getgenv().AntiAfkLoop then pcall(task.cancel, getgenv().AntiAfkLoop) end
 if getgenv().AntiVoidLoop then getgenv().AntiVoidLoop:Disconnect() end
 
 getgenv().AutoFarmDelivery = true
-getgenv().JobPhase = "Init" -- TRAVADO NO INIT! Ele VAI pro pad primeiro.
+getgenv().JobPhase = "Init" 
 getgenv().LastAnchor = nil
-getgenv().LastTargetMissingLog = 0
+getgenv().NoAnchorTicks = 0
 local badTargets = {}
 
 local vu = game:GetService("VirtualUser")
@@ -270,16 +270,27 @@ local function NavegarComPathfinder(targetPos, isPad, anchorRef)
         return true
 
     else
-        logMsg("⚠️ Pathfinder falhou. Rota direta (Fallback)...")
-        local timeOut = 0
-        while timeOut < 150 do
+        logMsg("⚠️ Caminho normal bloqueado ou falhou. Teleportando acima do alvo e caindo...")
+        c, rt, hum = getChar()
+        if not (rt and hum) then return false end
+
+        rt.Velocity = Vector3.zero
+        rt.CFrame = CFrame.new(targetPos + Vector3.new(0, 300, 0))
+        hum.PlatformStand = false
+        hum:ChangeState(Enum.HumanoidStateType.Freefall)
+
+        local fallTimeout = 0
+        while fallTimeout < 80 do 
             c, rt, hum = getChar()
             if not (rt and hum) then return false end
-
+            
             if not isPad and anchorRef then
                 if anchorRef.Parent ~= ws then return true end
-                local distToTarget = (rt.Position * Vector3.new(1,0,1) - targetPos * Vector3.new(1,0,1)).Magnitude
-                if distToTarget <= 6 then
+                
+                local distFlat = (rt.Position * Vector3.new(1,0,1) - targetPos * Vector3.new(1,0,1)).Magnitude
+                local distY = math.abs(rt.Position.Y - targetPos.Y)
+                
+                if distFlat <= 15 and distY <= 15 then
                     fRem("AttemptDeliveryComplete")
                     fRem("AttemptDeliveryPickup")
 
@@ -296,16 +307,7 @@ local function NavegarComPathfinder(targetPos, isPad, anchorRef)
                     end
                 end
             end
-
-            local distAtual = (rt.Position * Vector3.new(1,0,1) - targetPos * Vector3.new(1,0,1)).Magnitude
-            if distAtual <= 3.5 then
-                hum:MoveTo(rt.Position)
-                return true
-            else
-                hum:MoveTo(targetPos)
-            end
-
-            timeOut = timeOut + 1
+            fallTimeout = fallTimeout + 1
             task.wait(0.1)
         end
         return false
@@ -330,7 +332,7 @@ getgenv().DeliveryLoop = task.spawn(function()
 
         if charHum.Health <= 0 then
             logMsg("💀 ALERTA: O Bot MORREU! Motivo: Vida zerada (Foi esmagado, atropelado ou deu Reset).")
-            getgenv().JobPhase = "Init" -- Força a voltar pro pad ao nascer
+            getgenv().JobPhase = "Init" 
             task.wait(5)
             continue
         end
@@ -343,6 +345,7 @@ getgenv().DeliveryLoop = task.spawn(function()
         end
 
         if getgenv().JobPhase == "Init" then
+            getgenv().NoAnchorTicks = 0
             local modeStr = getgenv().DeliveryMode
             local mode = (modeStr == "Hard" or modeStr == "HighRisk") and "HighRisk" or "Safe"
             local pad = nil
@@ -369,7 +372,6 @@ getgenv().DeliveryLoop = task.spawn(function()
                 task.wait(0.5)
                 fRem("AttemptDeliveryPickup")
 
-                -- LIBERA PRA IR PRAS CASAS
                 getgenv().JobPhase = "Farming"
                 task.wait(1.5)
             else
@@ -380,16 +382,20 @@ getgenv().DeliveryLoop = task.spawn(function()
             local t = ws:FindFirstChild("DeliveryTargetAnchor")
 
             if not t or t.Parent ~= ws then
-                -- Adicionado log de inatividade quando o alvo some
-                if tick() - getgenv().LastTargetMissingLog > 5 then
-                    logMsg("⚠️ ALERTA: Nenhum alvo (DeliveryTargetAnchor) no mapa! Aguardando o jogo gerar o próximo...")
-                    getgenv().LastTargetMissingLog = tick()
+                getgenv().NoAnchorTicks = getgenv().NoAnchorTicks + 1
+                
+                if getgenv().NoAnchorTicks > 8 then 
+                    logMsg("⚠️ Rota/Alvo não encontrados! Bot perdeu o serviço. Ativando o serviço de novo...")
+                    getgenv().JobPhase = "Init"
+                    getgenv().NoAnchorTicks = 0
                 end
                 
                 getgenv().LastAnchor = nil
                 task.wait(0.5)
                 continue
             end
+
+            getgenv().NoAnchorTicks = 0
 
             if badTargets[t] and (tick() - badTargets[t] < 10) then
                 task.wait(0.5)
