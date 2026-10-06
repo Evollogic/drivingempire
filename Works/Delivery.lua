@@ -412,6 +412,14 @@ getgenv().DeliveryLoop = task.spawn(function()
                     local tempoCasa = math.random(30, 50) / 10
                     logMsg("📦 Sucesso! Próximo em " .. tempoCasa .. "s...")
                     task.wait(tempoCasa)
+                    
+                    -- CORREÇÃO: Garante o reset do LastAnchor e aguarda o próximo alvo carregar antes do próximo ciclo
+                    getgenv().LastAnchor = nil
+                    local waitSpawn = 0
+                    while not ws:FindFirstChild("DeliveryTargetAnchor") and waitSpawn < 30 do
+                        waitSpawn = waitSpawn + 1
+                        task.wait(0.1)
+                    end
                 else
                     logMsg("⚠️ Caminhada falhou ou travou. Resetando alvo...")
                     badTargets[t] = tick()
